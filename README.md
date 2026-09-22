@@ -1,32 +1,47 @@
 # ecomerce
 
-Django REST Framework ecommerce backend.
+Django REST Framework + React (Vite) ecommerce.
 
-## Setup
+## Backend setup
 
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env       # edit DJANGO_SECRET_KEY for production
 cd src
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-## API endpoints
+## Frontend setup
 
-### Auth
-- `POST /auth/register/`
-- `POST /auth/login/` (customer)
-- `POST /auth/staff/login/`
-- `POST /auth/admin/login/`
-- `POST /auth/superuser/login/`
-- `POST /auth/logout/`
-- `GET  /auth/me/`
+```bash
+cd frontend
+npm install
+# optional: echo VITE_API_URL=http://127.0.0.1:8000 > .env
+npm run dev
+```
+
+## Auth API
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/auth/register/` | email, username, password, telephone_no |
+| POST | `/auth/login/` | **unified** login (optional `required_role`) |
+| POST | `/auth/customer/login/` | customer-only |
+| POST | `/auth/staff/login/` | staff |
+| POST | `/auth/admin/login/` | admin |
+| POST | `/auth/superuser/login/` | superuser |
+| POST | `/auth/logout/` | body: `{ "refresh": "..." }` |
+| GET  | `/auth/me/` | current user |
+| POST | `/auth/change-password/` | current_password, new_password |
+| POST | `/auth/token/refresh/` | `{ "refresh": "..." }` |
 
 ### Products & Cart
+
 - `GET    /api/products/`
 - `GET    /api/products/{slug}/`
 - `GET    /api/cart/`
@@ -36,6 +51,7 @@ python manage.py runserver
 - `DELETE /api/cart/clear/`
 
 ### Orders
+
 - `GET  /api/orders/`
 - `GET  /api/orders/{id}/`
 - `POST /api/orders/`   (checkout from cart)

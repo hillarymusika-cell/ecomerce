@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getProducts } from "../api/productApi";
 import ProductGrid from "../components/ProductGrid";
 import Loading from "../components/Loading";
+import LOGO_SRC from "../assets/logoData";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
@@ -19,16 +20,28 @@ export default function Home() {
       <section className="hero">
         <div className="container hero-content">
           <div>
-            <span className="eyebrow">MODERN ONLINE SHOPPING</span>
-            <h1>Find products worth bringing home.</h1>
-            <p>Browse quality products, add them to your cart, and complete your order in a few simple steps.</p>
-            <Link className="button" to="/products">Shop products</Link>
+            <span className="eyebrow">ADAMS COLLECTION</span>
+            <h1>Style. Quality. You.</h1>
+            <p>
+              Discover curated pieces chosen for everyday confidence. Shop the collection,
+              add favorites to your cart, and checkout in a few simple steps.
+            </p>
+            <Link className="button" to="/products">Shop the collection</Link>
           </div>
-          <div className="hero-card"><span>NEW</span><strong>Simple.</strong><strong>Fast.</strong><strong>Secure.</strong></div>
+          <div className="hero-card hero-card-logo">
+            <img src={LOGO_SRC} alt="Adams Collection" className="hero-logo" />
+            <span>STYLE · QUALITY · YOU</span>
+          </div>
         </div>
       </section>
       <section className="section container">
-        <div className="section-heading"><div><span className="eyebrow">OUR STORE</span><h2>Featured products</h2></div><Link to="/products">View all</Link></div>
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">FEATURED</span>
+            <h2>Latest from the collection</h2>
+          </div>
+          <Link to="/products">View all</Link>
+        </div>
         {loading ? <Loading /> : <ProductGrid products={products} />}
       </section>
     </>
