@@ -1,23 +1,34 @@
+import { Link } from "react-router-dom";
+import LOGO_SRC from "../assets/logoData";
+
 export default function Footer() {
   return (
     <footer className="footer">
       <div className="container footer-grid">
         <div>
-          <div className="brand">Ecomerce</div>
-          <p>Simple shopping powered by a Django REST API and React.</p>
+          <div className="footer-brand">
+            <img src={LOGO_SRC} alt="Adams Collection" className="footer-logo" />
+            <div>
+              <div className="brand">Adams Collection</div>
+              <p className="tagline">Style · Quality · You</p>
+            </div>
+          </div>
+          <p>Curated fashion and lifestyle pieces — powered by a Django REST API and React.</p>
         </div>
         <div>
           <h4>Shop</h4>
-          <a href="/products">Products</a>
-          <a href="/cart">Cart</a>
+          <Link to="/products">Products</Link>
+          <Link to="/cart">Cart</Link>
         </div>
         <div>
           <h4>Account</h4>
-          <a href="/login">Login</a>
-          <a href="/register">Create account</a>
+          <Link to="/login">Login</Link>
+          <Link to="/register">Create account</Link>
         </div>
       </div>
-      <div className="container footer-bottom">© {new Date().getFullYear()} Ecomerce</div>
+      <div className="container footer-bottom">
+        © {new Date().getFullYear()} Adams Collection. All rights reserved.
+      </div>
     </footer>
   );
 }
