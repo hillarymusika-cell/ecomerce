@@ -15,7 +15,7 @@ button { cursor: pointer; }
 .page { flex: 1; }
 .navbar { background: #0b1220; color: #fff; position: sticky; top: 0; z-index: 20; }
 .nav-inner { min-height: 74px; display: flex; align-items: center; gap: 34px; }
-.brand { font-size: 1.25rem; font-weight: 900; letter-spacing: -.04em; }
+/* brand styles extended below */
 .nav-links { display: flex; gap: 24px; margin-right: auto; color: #b8c2d1; }
 .nav-links a.active { color: #fff; }
 .nav-actions { display: flex; align-items: center; gap: 10px; }
@@ -125,4 +125,80 @@ button { cursor: pointer; }
   .cart-item { grid-template-columns: 1fr auto; }
   .order-card { grid-template-columns: 1fr; }
   .search { flex-direction: column; }
+}
+
+/* Adams Collection brand */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  color: #fff;
+}
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  padding: 2px;
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.brand-text strong {
+  font-size: 1.05rem;
+  letter-spacing: .02em;
+}
+.brand-text small {
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #7ee2b8;
+}
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.footer-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  padding: 3px;
+}
+.footer .brand {
+  font-size: 1.15rem;
+  color: #fff;
+}
+.footer .tagline {
+  margin: 2px 0 0;
+  font-size: .78rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #7ee2b8;
+}
+.hero-card-logo {
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+.hero-logo {
+  width: min(220px, 70%);
+  height: auto;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 20px;
+  padding: 14px;
+}
+.hero-card-logo span {
+  margin-top: 8px;
 }
