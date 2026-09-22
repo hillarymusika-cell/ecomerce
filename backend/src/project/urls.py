@@ -16,17 +16,29 @@ from app.auth import (
     ChangePasswordView,
     AuthTokenRefreshView,
 )
-from app.api_view import ProductViewSet, CartViewSet, OrderViewSet
+from app.api_view import (
+    ProductViewSet,
+    CartViewSet,
+    OrderViewSet,
+    CategoryViewSet,
+    AdminDashboardView,
+    AdminUserViewSet,
+    AdminOrderViewSet,
+)
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
 router.register(r"orders", OrderViewSet, basename="order")
+router.register(r"categories", CategoryViewSet, basename="category")
+
+admin_router = DefaultRouter()
+admin_router.register(r"users", AdminUserViewSet, basename="admin-user")
+admin_router.register(r"orders", AdminOrderViewSet, basename="admin-order")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    # Auth
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/login/", LoginView.as_view(), name="login"),  # unified
+    path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/customer/login/", CustomerLoginView.as_view(), name="customer-login"),
     path("auth/staff/login/", StaffLoginView.as_view(), name="staff-login"),
     path("auth/admin/login/", AdminLoginView.as_view(), name="admin-login"),
@@ -35,9 +47,7 @@ urlpatterns = [
     path("auth/me/", MeView.as_view(), name="me"),
     path("auth/change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("auth/token/refresh/", AuthTokenRefreshView.as_view(), name="token-refresh"),
-    # Legacy alias used by older frontend
     path("api/token/refresh/", AuthTokenRefreshView.as_view(), name="token-refresh-api"),
-    # API
     path("api/", include(router.urls)),
     path("api/cart/", CartViewSet.as_view({"get": "list"}), name="cart"),
     path("api/cart/add/", CartViewSet.as_view({"post": "add"}), name="cart-add"),
@@ -47,6 +57,8 @@ urlpatterns = [
         name="cart-item",
     ),
     path("api/cart/clear/", CartViewSet.as_view({"delete": "clear"}), name="cart-clear"),
+    path("api/admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("api/admin/", include(admin_router.urls)),
 ]
 
 if settings.DEBUG:

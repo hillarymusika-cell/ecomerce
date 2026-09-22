@@ -12,6 +12,11 @@ import OrderDetails from "./pages/OrderDetails";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Account from "./pages/Account";
+import StaffDashboard from "./pages/staff/StaffDashboard";
+import StaffProductForm from "./pages/staff/StaffProductForm";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminOrders from "./pages/admin/AdminOrders";
 
 export default function App() {
   return (
@@ -22,13 +27,19 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:slug" element={<ProductDetails />} />
-          <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-          <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-          <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-          <Route path="/orders/:id" element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
+          <Route path="/cart" element={<ProtectedRoute roles={["customer", "admin", "staff"]}><Cart /></ProtectedRoute>} />
+          <Route path="/checkout" element={<ProtectedRoute roles={["customer", "admin", "staff"]}><Checkout /></ProtectedRoute>} />
+          <Route path="/orders" element={<ProtectedRoute roles={["customer", "admin", "staff"]}><Orders /></ProtectedRoute>} />
+          <Route path="/orders/:id" element={<ProtectedRoute roles={["customer", "admin", "staff"]}><OrderDetails /></ProtectedRoute>} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute roles={["staff", "admin"]}><StaffDashboard /></ProtectedRoute>} />
+          <Route path="/staff/products/new" element={<ProtectedRoute roles={["staff", "admin"]}><StaffProductForm /></ProtectedRoute>} />
+          <Route path="/staff/products/:slug/edit" element={<ProtectedRoute roles={["staff", "admin"]}><StaffProductForm /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute roles={["admin"]}><AdminUsers /></ProtectedRoute>} />
+          <Route path="/admin/orders" element={<ProtectedRoute roles={["admin"]}><AdminOrders /></ProtectedRoute>} />
         </Routes>
       </main>
       <Footer />
