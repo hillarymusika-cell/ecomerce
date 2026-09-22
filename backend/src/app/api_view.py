@@ -20,7 +20,7 @@ from serializers import (
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
     list:     GET /api/products/
-    retrieve: GET /api/products/{id}/
+    retrieve: GET /api/products/{slug}/
     """
     queryset = Product.objects.filter(status=Product.Status.ACTIVE).order_by("name")
     serializer_class = ProductSerializer
@@ -210,7 +210,6 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                 oi.order = order
             OrderItem.objects.bulk_create(order_items)
 
-            # Reduce stock
             for item in items:
                 item.product.reduce_stock(item.quantity)
 
