@@ -1,20 +1,50 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from app.models import Product, Cart, CartItem, Order, OrderItem, ProductImage
 
-from .models import Product, Cart, CartItem, Order, OrderItem
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ["id", "image", "alt_text", "is_primary", "sort_order"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    images = ProductImageSerializer(many=True, read_only=True)
+    primary_image_url = serializers.CharField(read_only=True)
+    is_available = serializers.BooleanField(read_only=True)
+    is_in_stock = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Product
-        fields = ["id", "name", "description", "price", "is_available", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "sku",
+            "description",
+            "short_description",
+            "price",
+            "compare_at_price",
+            "currency",
+            "stock_quantity",
+            "status",
+            "is_featured",
+            "is_digital",
+            "is_available",
+            "is_in_stock",
+            "primary_image_url",
+            "images",
+            "category",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "slug", "created_at", "updated_at"]
 
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.filter(is_available=True),
+        queryset=Product.objects.filter(status=Product.Status.ACTIVE),
         source="product",
         write_only=True,
     )
@@ -52,15 +82,11 @@ class CartSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
-    subtotal = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
-        fields = ["id", "product", "quantity", "price", "subtotal"]
-        read_only_fields = ["id", "price", "subtotal"]
-
-    def get_subtotal(self, obj):
-        return obj.price * obj.quantity
+        fields = ["id", "product", "product_name", "sku", "quantity", "unit_price", "total_price"]
+        read_only_fields = ["id", "product_name", "sku", "unit_price", "total_price"]
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -68,11 +94,30 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ["id", "total", "status", "items", "created_at", "updated_at"]
-        read_only_fields = ["id", "total", "status", "created_at", "updated_at"]
-
-
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ["id", "username", "email"]
+        fields = [
+            "id",
+            "order_number",
+            "status",
+            "subtotal",
+            "shipping_cost",
+            "tax_amount",
+            "discount",
+            "total",
+            "currency",
+            "shipping_address",
+            "billing_address",
+            "notes",
+            "items",
+            "created_at",
+            "updated_at",
+            "paid_at",
+        ]
+        read_only_fields = [
+            "id",
+            "order_number",
+            "subtotal",
+            "total",
+            "created_at",
+            "updated_at",
+            "paid_at",
+        ]

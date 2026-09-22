@@ -1,16 +1,15 @@
-# shop/api_views.py
 from decimal import Decimal
+import uuid
 
 from django.db import transaction
-from django.db.models import F, Sum
-from rest_framework import generics, status, viewsets
+from django.db.models import F
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from .models import Product, Cart, CartItem, Order, OrderItem
-from .serializers import (
+from serializers import (
     ProductSerializer,
     CartSerializer,
     CartItemSerializer,
@@ -20,17 +19,18 @@ from .serializers import (
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    list:   GET  /api/products/
+    list:     GET /api/products/
     retrieve: GET /api/products/{id}/
     """
-    queryset = Product.objects.filter(is_available=True).order_by("name")
+    queryset = Product.objects.filter(status=Product.Status.ACTIVE).order_by("name")
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
+    lookup_field = "slug"
 
 
 class CartViewSet(viewsets.ViewSet):
     """
-    retrieve: GET    /api/cart/
+    list:     GET    /api/cart/
     add:      POST   /api/cart/add/
     update:   PATCH  /api/cart/items/{item_id}/
     remove:   DELETE /api/cart/items/{item_id}/
@@ -55,11 +55,17 @@ class CartViewSet(viewsets.ViewSet):
             )
 
         try:
-            product = Product.objects.get(id=product_id, is_available=True)
+            product = Product.objects.get(id=product_id, status=Product.Status.ACTIVE)
         except Product.DoesNotExist:
             return Response(
                 {"detail": "Product not found or unavailable."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if product.track_inventory and product.stock_quantity < quantity:
+            return Response(
+                {"detail": "Insufficient stock."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         cart, _ = Cart.objects.get_or_create(user=request.user)
@@ -136,8 +142,8 @@ class CartViewSet(viewsets.ViewSet):
 
 class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    list:     GET /api/orders/
-    retrieve: GET /api/orders/{id}/
+    list:     GET  /api/orders/
+    retrieve: GET  /api/orders/{id}/
     create:   POST /api/orders/  (checkout)
     """
     serializer_class = OrderSerializer
@@ -160,9 +166,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         with transaction.atomic():
-            items = list(
-                cart.items.select_related("product").select_for_update()
-            )
+            items = list(cart.items.select_related("product").select_for_update())
 
             if not items:
                 return Response(
@@ -170,28 +174,45 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            total = sum(
-                (item.product.price * item.quantity for item in items),
-                Decimal("0.00"),
-            )
+            subtotal = Decimal("0.00")
+            order_items = []
 
-            order = Order.objects.create(
-                user=request.user,
-                total=total,
-                status="pending",
-            )
-
-            OrderItem.objects.bulk_create(
-                [
-                    OrderItem(
-                        order=order,
-                        product=item.product,
-                        quantity=item.quantity,
-                        price=item.product.price,
+            for item in items:
+                product = item.product
+                if product.track_inventory and product.stock_quantity < item.quantity:
+                    return Response(
+                        {"detail": f"Insufficient stock for {product.name}."},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
-                    for item in items
-                ]
+                line_total = product.price * item.quantity
+                subtotal += line_total
+                order_items.append(
+                    OrderItem(
+                        product=product,
+                        product_name=product.name,
+                        sku=product.sku,
+                        quantity=item.quantity,
+                        unit_price=product.price,
+                        total_price=line_total,
+                    )
+                )
+
+            order_number = f"ORD-{uuid.uuid4().hex[:12].upper()}"
+            order = Order.objects.create(
+                order_number=order_number,
+                user=request.user,
+                subtotal=subtotal,
+                total=subtotal,
+                status=Order.Status.PENDING,
             )
+
+            for oi in order_items:
+                oi.order = order
+            OrderItem.objects.bulk_create(order_items)
+
+            # Reduce stock
+            for item in items:
+                item.product.reduce_stock(item.quantity)
 
             cart.items.all().delete()
 
