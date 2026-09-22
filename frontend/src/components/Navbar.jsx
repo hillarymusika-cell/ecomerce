@@ -4,7 +4,7 @@ import { useCart } from "../context/CartContext";
 import LOGO_SRC from "../assets/logoData";
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, role, isStaff, isAdmin } = useAuth();
   const { count } = useCart();
   const navigate = useNavigate();
 
@@ -25,15 +25,22 @@ export default function Navbar() {
         </Link>
         <nav className="nav-links">
           <NavLink to="/products">Shop</NavLink>
-          {user && <NavLink to="/orders">Orders</NavLink>}
+          {user && role === "customer" && <NavLink to="/orders">Orders</NavLink>}
+          {isStaff && <NavLink to="/staff">Staff</NavLink>}
+          {isAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="nav-actions">
-          <Link className="nav-icon" to="/cart" aria-label="Cart">
-            Cart <span>{count}</span>
-          </Link>
+          {role === "customer" && (
+            <Link className="nav-icon" to="/cart" aria-label="Cart">
+              Cart <span>{count}</span>
+            </Link>
+          )}
           {user ? (
             <>
-              <Link className="account-link" to="/account">{user.username}</Link>
+              <Link className="account-link" to="/account">
+                {user.username}
+                {role && role !== "customer" ? ` · ${role}` : ""}
+              </Link>
               <button className="button ghost small" onClick={signOut}>Logout</button>
             </>
           ) : (

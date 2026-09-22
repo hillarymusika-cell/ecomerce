@@ -9,6 +9,14 @@ import {
 
 const AuthContext = createContext(null);
 
+function deriveRole(user) {
+  if (!user) return null;
+  if (user.role_label) return user.role_label;
+  if (user.is_superuser || user.is_admin) return "admin";
+  if (user.is_staff) return "staff";
+  return "customer";
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,17 +55,14 @@ export function AuthProvider({ children }) {
     try {
       if (refresh) await logoutApi(refresh);
     } catch {
-      // ignore network errors on logout
+      /* ignore */
     } finally {
       clearSession();
     }
   };
 
   const changePassword = async ({ current_password, new_password }) => {
-    const { data } = await changePasswordApi({
-      current_password,
-      new_password,
-    });
+    const { data } = await changePasswordApi({ current_password, new_password });
     if (data.tokens) saveSession(data);
     return data;
   };
@@ -90,6 +95,8 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, [clearSession]);
 
+  const role = deriveRole(user);
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,8 +108,9 @@ export function AuthProvider({ children }) {
         changePassword,
         refreshUser,
         isAuthenticated: !!user,
-        isStaff: !!user?.is_staff,
-        isAdmin: !!(user?.is_admin || user?.is_superuser),
+        isStaff: role === "staff" || role === "admin",
+        isAdmin: role === "admin",
+        role,
       }}
     >
       {children}
