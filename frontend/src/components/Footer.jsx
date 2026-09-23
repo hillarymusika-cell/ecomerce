@@ -13,7 +13,9 @@ export default function Footer() {
               <p className="tagline">Style · Quality · You</p>
             </div>
           </div>
-          <p>Curated fashion and lifestyle pieces — powered by a Django REST API and React.</p>
+          <p className="footer-desc">
+            Curated fashion and lifestyle pieces — shop with confidence.
+          </p>
         </div>
         <div>
           <h4>Shop</h4>
@@ -24,11 +26,12 @@ export default function Footer() {
           <h4>Account</h4>
           <Link to="/login">Login</Link>
           <Link to="/register">Create account</Link>
+          <Link to="/orders">Orders</Link>
         </div>
-      </div>
-      <div>
-          <h4>Privacy policy</h4>
+        <div>
+          <h4>Legal</h4>
           <Link to="/privacy">Privacy Policy</Link>
+        </div>
       </div>
       <div className="container footer-bottom">
         © {new Date().getFullYear()} Adams Collection. All rights reserved.
