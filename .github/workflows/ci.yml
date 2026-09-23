@@ -147,7 +147,6 @@ jobs:
     needs: [backend, frontend]
     permissions:
       contents: read
-      security-events: write
 
     steps:
       - name: Checkout
@@ -203,7 +202,7 @@ jobs:
           exit 0
 
       - name: Trivy scan (backend)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ecomerce-backend:ci
           format: table
@@ -212,7 +211,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy scan (frontend)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ecomerce-frontend:ci
           format: table
