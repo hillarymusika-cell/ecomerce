@@ -20,6 +20,10 @@ concurrency:
   group: deploy-${{ github.event.inputs.environment || 'staging' }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   gate:
     name: CI gate
@@ -32,14 +36,13 @@ jobs:
         run: echo "CI succeeded – proceeding with deploy"
 
   build-and-push:
-    name: Build & push image
+    name: Build & push images
     needs: gate
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 30
     outputs:
-      image: ${{ steps.meta.outputs.tags }}
+      backend_image: ${{ steps.meta-backend.outputs.tags }}
+      frontend_image: ${{ steps.meta-frontend.outputs.tags }}
 
     steps:
       - name: Checkout
@@ -48,35 +51,56 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
-        id: meta
+      - name: Docker metadata (backend)
+        id: meta-backend
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/backend
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event.workflow_run.head_branch == 'main' }}
+
+      - name: Docker metadata (frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/frontend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event.workflow_run.head_branch == 'main' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push
+      - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL || 'http://localhost:8000' }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
 
   deploy-staging:
     name: Deploy staging
@@ -92,22 +116,21 @@ jobs:
     steps:
       - name: Deploy notice
         run: |
-          echo "Image ready: ${{ needs.build-and-push.outputs.image }}"
-          echo "Configure STAGING deploy secrets to enable automatic rollout."
-          echo "Supported hooks:"
-          echo "  - secrets.DEPLOY_WEBHOOK_URL  (POST with image tag)"
-          echo "  - secrets.SSH_HOST + SSH_KEY  (ssh deploy script)"
+          echo "Backend:  ${{ needs.build-and-push.outputs.backend_image }}"
+          echo "Frontend: ${{ needs.build-and-push.outputs.frontend_image }}"
+          echo "Configure secrets.DEPLOY_WEBHOOK_URL for automatic rollout."
 
       - name: Webhook deploy (optional)
         if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
         env:
           WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
+          FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
         run: |
           curl -fsS -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
-            -d "{\"image\":\"$IMAGE\",\"environment\":\"staging\",\"sha\":\"${{ github.sha }}\"}"
+            -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"staging\",\"sha\":\"${{ github.sha }}\"}"
 
   deploy-production:
     name: Deploy production
@@ -121,15 +144,18 @@ jobs:
     steps:
       - name: Deploy notice
         run: |
-          echo "Production deploy for image: ${{ needs.build-and-push.outputs.image }}"
+          echo "Production deploy"
+          echo "Backend:  ${{ needs.build-and-push.outputs.backend_image }}"
+          echo "Frontend: ${{ needs.build-and-push.outputs.frontend_image }}"
 
       - name: Webhook deploy (optional)
         if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
         env:
           WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
+          FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
         run: |
           curl -fsS -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
-            -d "{\"image\":\"$IMAGE\",\"environment\":\"production\",\"sha\":\"${{ github.sha }}\"}"
+            -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"production\",\"sha\":\"${{ github.sha }}\"}"

@@ -1,19 +1,64 @@
+# VCS & CI
 .git
 .github
+.gitignore
+
+# Python virtualenvs & caches
 .venv
 venv
+env
 __pycache__
-*.pyc
+**/__pycache__
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache
+**/.pytest_cache
+.mypy_cache
+**/.mypy_cache
+.ruff_cache
+**/.ruff_cache
+.coverage
+**/.coverage
+htmlcov
+**/htmlcov
+*.egg-info
+**/*.egg-info
+.tox
+.nox
+
+# Local env & secrets
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+
+# Local DBs & runtime data
 *.sqlite3
-frontend/node_modules
-frontend/dist
+**/*.sqlite3
 **/media
 **/staticfiles
-README.md
+backend/src/db.sqlite3
+
+# Frontend toolchain (installed inside image)
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/coverage
+
+# Docs & IDE (not needed in image context)
 *.md
-.pytest_cache
-.mypy_cache
-.coverage
-htmlcov
+!README.md
+.vscode
+.idea
+**/.DS_Store
+*.log
+
+# Compose / Docker meta (Dockerfile itself is passed via -f, not context)
+docker-compose*.yml
+Dockerfile*
+docker/nginx.conf.bak
+
+# Tests (optional: uncomment to shrink context further if tests never run in image)
+# backend/src/app/tests

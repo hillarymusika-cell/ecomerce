@@ -1,0 +1,32 @@
+# Production-oriented overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    restart: always
+    environment:
+      DJANGO_DEBUG: "False"
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-False}
+      LOG_LEVEL: INFO
+    # Do not bind-mount source in prod; image is self-contained
+    volumes:
+      - media_data:/app/media
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  frontend:
+    profiles: []
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    restart: always
+    # Prefer not exposing Postgres publicly in production
+    ports: []

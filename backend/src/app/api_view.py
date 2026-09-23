@@ -1,13 +1,16 @@
 """
-API views – products, cart, orders, categories, admin.
+API views - products, cart, orders, categories, admin.
 Hardened with select_related/prefetch, atomic stock checks, and clear errors.
 """
 from decimal import Decimal
 import logging
 import uuid
+from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, Q, Sum, Avg
+from django.db.models.functions import TruncDate, Coalesce
+from django.utils import timezone
 from rest_framework import status, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -34,6 +37,7 @@ from .serializers import (
     UserAdminSerializer,
 )
 from .permissions import IsStaffUser, IsAdminUser, IsStaffOrReadOnly
+from . import cache_utils
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +47,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    """
-    list/retrieve: public
-    create/update/delete: staff+
-    """
     queryset = Category.objects.filter(is_active=True).select_related("parent")
     serializer_class = CategorySerializer
     permission_classes = [IsStaffOrReadOnly]
@@ -66,10 +66,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    """
-    list/retrieve: public (active only for anon)
-    create/update/delete: staff+
-    """
     serializer_class = ProductSerializer
     permission_classes = [IsStaffOrReadOnly]
     lookup_field = "slug"
@@ -86,13 +82,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
         if not is_staff:
             qs = qs.filter(status=Product.Status.ACTIVE)
-
-        # Optional query filters
         category = self.request.query_params.get("category")
         if category:
-            qs = qs.filter(
-                Q(category__slug=category) | Q(category_id=category)
-            )
+            qs = qs.filter(Q(category__slug=category) | Q(category_id=category))
         featured = self.request.query_params.get("featured")
         if featured is not None:
             qs = qs.filter(is_featured=featured.lower() in ("1", "true", "yes"))
@@ -121,13 +113,6 @@ class ProductViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 
 class CartViewSet(viewsets.ViewSet):
-    """
-    list:     GET    /api/cart/
-    add:      POST   /api/cart/add/
-    update:   PATCH  /api/cart/items/{item_id}/
-    remove:   DELETE /api/cart/items/{item_id}/
-    clear:    DELETE /api/cart/clear/
-    """
     permission_classes = [IsAuthenticated]
 
     def _get_cart(self, user):
@@ -149,46 +134,24 @@ class CartViewSet(viewsets.ViewSet):
         try:
             quantity = int(request.data.get("quantity", 1))
         except (TypeError, ValueError):
-            return Response(
-                {"detail": "Invalid quantity."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
         if quantity < 1:
-            return Response(
-                {"detail": "Quantity must be at least 1."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"detail": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             product = Product.objects.select_for_update(of=("self",)).get(
                 id=product_id, status=Product.Status.ACTIVE
             )
         except Product.DoesNotExist:
-            return Response(
-                {"detail": "Product not found or unavailable."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
+            return Response({"detail": "Product not found or unavailable."}, status=status.HTTP_404_NOT_FOUND)
         with transaction.atomic():
-            # Re-fetch under lock for stock safety
             product = Product.objects.select_for_update().get(pk=product.pk)
             if product.status != Product.Status.ACTIVE:
-                return Response(
-                    {"detail": "Product not available."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"detail": "Product not available."}, status=status.HTTP_400_BAD_REQUEST)
             if product.track_inventory and product.stock_quantity < quantity:
-                return Response(
-                    {"detail": "Insufficient stock."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
+                return Response({"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST)
             cart = self._get_cart(request.user)
             item, created = CartItem.objects.select_for_update().get_or_create(
-                cart=cart,
-                product=product,
-                defaults={"quantity": quantity},
+                cart=cart, product=product, defaults={"quantity": quantity},
             )
             if not created:
                 new_qty = item.quantity + quantity
@@ -199,7 +162,6 @@ class CartViewSet(viewsets.ViewSet):
                     )
                 item.quantity = new_qty
                 item.save(update_fields=["quantity", "updated_at"])
-
         item = CartItem.objects.select_related("product").get(pk=item.pk)
         return Response(
             CartItemSerializer(item).data,
@@ -213,50 +175,29 @@ class CartViewSet(viewsets.ViewSet):
                 id=item_id, cart__user=request.user
             )
         except CartItem.DoesNotExist:
-            return Response(
-                {"detail": "Cart item not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
+            return Response({"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
         quantity = request.data.get("quantity")
         if quantity is None:
-            return Response(
-                {"detail": "Quantity is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "Quantity is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             quantity = int(quantity)
         except (TypeError, ValueError):
-            return Response(
-                {"detail": "Invalid quantity."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
         if quantity <= 0:
             item.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-
         product = item.product
         if product.track_inventory and product.stock_quantity < quantity:
-            return Response(
-                {"detail": "Insufficient stock."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST)
         item.quantity = quantity
         item.save(update_fields=["quantity", "updated_at"])
         return Response(CartItemSerializer(item).data)
 
     @action(detail=False, methods=["delete"], url_path=r"items/(?P<item_id>[^/.]+)")
     def remove_item(self, request, item_id=None):
-        deleted, _ = CartItem.objects.filter(
-            id=item_id, cart__user=request.user
-        ).delete()
+        deleted, _ = CartItem.objects.filter(id=item_id, cart__user=request.user).delete()
         if not deleted:
-            return Response(
-                {"detail": "Cart item not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["delete"])
@@ -271,11 +212,6 @@ class CartViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 
 class OrderViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    list:     GET  /api/orders/
-    retrieve: GET  /api/orders/{id}/
-    create:   POST /api/orders/  (checkout)
-    """
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
@@ -287,52 +223,33 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
     def create(self, request):
-        """Checkout – create order from current cart (race-safe)."""
         cart = (
             Cart.objects.filter(user=request.user)
             .prefetch_related("items__product")
             .first()
         )
         if not cart or not cart.items.exists():
-            return Response(
-                {"detail": "Your cart is empty."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"detail": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
         shipping_address = request.data.get("shipping_address") or {}
         billing_address = request.data.get("billing_address") or shipping_address
         notes = (request.data.get("notes") or "")[:2000]
-
         try:
             with transaction.atomic():
-                items = list(
-                    cart.items.select_related("product").select_for_update()
-                )
+                items = list(cart.items.select_related("product").select_for_update())
                 if not items:
-                    return Response(
-                        {"detail": "Your cart is empty."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # Lock products for stock
+                    return Response({"detail": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
                 product_ids = [i.product_id for i in items]
                 products = {
                     p.id: p
-                    for p in Product.objects.select_for_update().filter(
-                        id__in=product_ids
-                    )
+                    for p in Product.objects.select_for_update().filter(id__in=product_ids)
                 }
-
                 subtotal = Decimal("0.00")
                 order_items = []
-
                 for item in items:
                     product = products.get(item.product_id)
                     if not product or product.status != Product.Status.ACTIVE:
                         return Response(
-                            {
-                                "detail": f"Product '{item.product.name}' is no longer available."
-                            },
+                            {"detail": f"Product '{item.product.name}' is no longer available."},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
                     if product.track_inventory and product.stock_quantity < item.quantity:
@@ -354,7 +271,6 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                             total_price=line_total,
                         )
                     )
-
                 order_number = f"ORD-{uuid.uuid4().hex[:12].upper()}"
                 order = Order.objects.create(
                     order_number=order_number,
@@ -366,132 +282,17 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                     billing_address=billing_address,
                     notes=notes,
                 )
-
                 for oi in order_items:
                     oi.order = order
                 OrderItem.objects.bulk_create(order_items)
-
                 for item in items:
                     products[item.product_id].reduce_stock(item.quantity)
-
                 cart.items.all().delete()
-
-            order = (
-                Order.objects.prefetch_related("items__product")
-                .get(pk=order.pk)
-            )
-            return Response(
-                OrderSerializer(order).data,
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception as e:
+            order = Order.objects.prefetch_related("items__product").get(pk=order.pk)
+            return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        except Exception:
             logger.exception("Checkout failed for user %s", request.user.id)
             return Response(
                 {"detail": "Checkout failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-
-# ---------------------------------------------------------------------------
-# Admin
-# ---------------------------------------------------------------------------
-
-class AdminDashboardView(APIView):
-    permission_classes = [IsAdminUser]
-
-    def get(self, request):
-        orders = Order.objects.all()
-        paid = orders.filter(
-            status__in=[
-                Order.Status.PAID,
-                Order.Status.PROCESSING,
-                Order.Status.SHIPPED,
-                Order.Status.DELIVERED,
-            ]
-        )
-        revenue = paid.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
-
-        return Response(
-            {
-                "users_count": User.objects.count(),
-                "products_count": Product.objects.count(),
-                "active_products": Product.objects.filter(
-                    status=Product.Status.ACTIVE
-                ).count(),
-                "orders_count": orders.count(),
-                "pending_orders": orders.filter(
-                    status=Order.Status.PENDING
-                ).count(),
-                "revenue": str(revenue),
-                "low_stock": Product.objects.filter(
-                    track_inventory=True,
-                    stock_quantity__lte=F("low_stock_threshold"),
-                    stock_quantity__gt=0,
-                ).count(),
-                "out_of_stock": Product.objects.filter(
-                    status=Product.Status.OUT_OF_STOCK
-                ).count(),
-            }
-        )
-
-
-class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsAdminUser]
-    serializer_class = UserAdminSerializer
-    queryset = User.objects.all().order_by("-created_at")
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["email", "username", "telephone_no"]
-    ordering_fields = ["created_at", "email"]
-
-
-class AdminOrderViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]
-    serializer_class = OrderSerializer
-    http_method_names = ["get", "patch", "head", "options"]
-    queryset = (
-        Order.objects.select_related("user")
-        .prefetch_related("items__product")
-        .order_by("-created_at")
-    )
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["order_number", "user__email"]
-    ordering_fields = ["created_at", "total", "status"]
-
-    def partial_update(self, request, *args, **kwargs):
-        order = self.get_object()
-        new_status = request.data.get("status")
-        if new_status and new_status in Order.Status.values:
-            order.status = new_status
-            order.save(update_fields=["status", "updated_at"])
-            return Response(OrderSerializer(order).data)
-        return Response(
-            {"detail": "Valid status required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Health
-# ---------------------------------------------------------------------------
-
-class HealthCheckView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request):
-        from django.db import connection
-
-        db_ok = False
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-            db_ok = True
-        except Exception:
-            logger.exception("Health check DB failure")
-
-        payload = {
-            "status": "ok" if db_ok else "degraded",
-            "database": "up" if db_ok else "down",
-        }
-        code = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
-        return Response(payload, status=code)
