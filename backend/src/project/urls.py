@@ -24,7 +24,9 @@ from app.api_view import (
     AdminDashboardView,
     AdminUserViewSet,
     AdminOrderViewSet,
+    HealthCheckView,
 )
+from app.transaction import payment_webhook, initiate_payment
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
@@ -37,6 +39,8 @@ admin_router.register(r"orders", AdminOrderViewSet, basename="admin-order")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("health/", HealthCheckView.as_view(), name="health"),
+    # Auth
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/customer/login/", CustomerLoginView.as_view(), name="customer-login"),
@@ -48,6 +52,7 @@ urlpatterns = [
     path("auth/change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("auth/token/refresh/", AuthTokenRefreshView.as_view(), name="token-refresh"),
     path("api/token/refresh/", AuthTokenRefreshView.as_view(), name="token-refresh-api"),
+    # Catalog + cart + orders
     path("api/", include(router.urls)),
     path("api/cart/", CartViewSet.as_view({"get": "list"}), name="cart"),
     path("api/cart/add/", CartViewSet.as_view({"post": "add"}), name="cart-add"),
@@ -57,8 +62,16 @@ urlpatterns = [
         name="cart-item",
     ),
     path("api/cart/clear/", CartViewSet.as_view({"delete": "clear"}), name="cart-clear"),
+    # Admin API
     path("api/admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("api/admin/", include(admin_router.urls)),
+    # Payments
+    path("api/payments/webhook/", payment_webhook, name="payment-webhook"),
+    path(
+        "api/orders/<int:order_id>/pay/",
+        initiate_payment,
+        name="initiate-payment",
+    ),
 ]
 
 if settings.DEBUG:

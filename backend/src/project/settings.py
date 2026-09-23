@@ -1,10 +1,12 @@
 """
-Django settings for the ecommerce project.
+Django settings for the ecommerce project – production-ready defaults.
 """
 
 import os
+import logging
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -56,17 +58,35 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "60/minute",
-        "user": "120/minute",
-        "auth": "10/minute",
+        "anon": os.environ.get("THROTTLE_ANON", "60/minute"),
+        "user": os.environ.get("THROTTLE_USER", "120/minute"),
+        "auth": os.environ.get("THROTTLE_AUTH", "10/minute"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
+    "PAGE_SIZE": int(os.environ.get("PAGE_SIZE", "20")),
+    "DEFAULT_FILTER_BACKENDS": [
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
 }
 
+if DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ]
+
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES", "60"))),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS", "7"))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        minutes=int(os.environ.get("JWT_ACCESS_MINUTES", "60"))
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        days=int(os.environ.get("JWT_REFRESH_DAYS", "7"))
+    ),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
@@ -85,7 +105,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# CORS — frontend Vite default port
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
@@ -116,10 +135,42 @@ TEMPLATES = [
 WSGI_APPLICATION = "project.wsgi.application"
 ASGI_APPLICATION = "project.asgi.application"
 
-DATABASES = {
+# ---------------------------------------------------------------------------
+# Database – SQLite by default; set DATABASE_URL for Postgres
+# e.g. postgres://user:pass@host:5432/dbname
+# ---------------------------------------------------------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
+    parsed = urlparse(DATABASE_URL)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": parsed.path.lstrip("/"),
+            "USER": parsed.username or "",
+            "PASSWORD": parsed.password or "",
+            "HOST": parsed.hostname or "",
+            "PORT": str(parsed.port or 5432),
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "OPTIONS": {"connect_timeout": 10},
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+# Optional local memory cache (swap for Redis in production)
+CACHES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "BACKEND": os.environ.get(
+            "CACHE_BACKEND",
+            "django.core.cache.backends.locmem.LocMemCache",
+        ),
+        "LOCATION": os.environ.get("CACHE_LOCATION", "ecomerce"),
     }
 }
 
@@ -134,7 +185,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
 USE_I18N = True
 USE_TZ = True
 
@@ -151,7 +202,7 @@ EMAIL_BACKEND = os.environ.get(
     "django.core.mail.backends.console.EmailBackend",
 )
 
-# Production security headers (active when DEBUG=False)
+# Production security
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -162,5 +213,58 @@ if not DEBUG:
         "true",
         "yes",
     )
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    X_FRAME_OPTIONS = "DENY"
+    # Trust proxy headers when behind a reverse proxy
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH", "")
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {name} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "app": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}
