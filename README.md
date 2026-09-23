@@ -191,6 +191,61 @@ erDiagram
         datetime created_at
     }
 ```
+```###SYSTEM FLOW CHART
+flowchart TD
+    A[React / Vite Frontend] --> B[REST API]
+
+    B --> C{Authentication Required?}
+
+    C -->|No| D[Public API]
+    C -->|Yes| E[JWT Authentication]
+
+    E --> F{Token Valid?}
+    F -->|No| G[401 Unauthorized]
+    F -->|Yes| H[Permission / Role Check]
+
+    D --> I[Django REST Framework]
+    H --> I
+
+    I --> J{Operation}
+
+    J -->|Products| K[Product / Category]
+    J -->|Cart| L[Cart / CartItem]
+    J -->|Checkout| M[Atomic Checkout]
+    J -->|Orders| N[Order / OrderItem]
+    J -->|Payment| O[Transaction]
+    J -->|Admin| P[Admin API]
+
+    K --> Q[(PostgreSQL)]
+    L --> Q
+    M --> Q
+    N --> Q
+    O --> Q
+    P --> Q
+
+    M --> R[Stock Lock]
+    R --> S[Create Order]
+    S --> T[Create Order Items]
+    T --> U[Reduce Stock]
+    U --> V[Clear Cart]
+
+    V --> W[Flutterwave]
+    W --> X[Payment Webhook]
+    X --> O
+
+    O --> Y{Payment Result}
+    Y -->|Success| Z[Transaction SUCCEEDED]
+    Z --> AA[Order PAID]
+
+    Y -->|Failed| AB[Transaction FAILED]
+
+    I --> AC[CustomerLog]
+    AC --> Q
+
+    AA --> AD[Return Order Status]
+    AB --> AD
+    AD --> A
+```
 
 ### Entity summary
 
