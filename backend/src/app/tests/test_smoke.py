@@ -1,6 +1,5 @@
 """Smoke tests for CI – models, health, catalog basics."""
 import pytest
-from django.urls import reverse
 from rest_framework.test import APIClient
 
 from app.models import Category, Product, User
@@ -46,7 +45,6 @@ def test_health_endpoint(api):
 def test_product_list_public(api, product):
     res = api.get("/api/products/")
     assert res.status_code == 200
-    # Paginated or list
     results = res.data.get("results", res.data)
     assert any(p["sku"] == "SKU-TEST-001" for p in results)
 
@@ -71,7 +69,8 @@ def test_register_and_login(api):
 
     res = api.post(
         "/auth/login/",
-        {"email": payload["email"], "password": payload["password"]},"n        format="json",
+        {"email": payload["email"], "password": payload["password"]},
+        format="json",
     )
     assert res.status_code == 200
     assert "tokens" in res.data
