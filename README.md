@@ -190,8 +190,8 @@ erDiagram
         json metadata
         datetime created_at
     }
-```
 ```###SYSTEM FLOW CHART
+```mermaid
 flowchart TD
     A[React / Vite Frontend] --> B[REST API]
 
