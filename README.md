@@ -13,6 +13,207 @@ Django REST Framework + React (Vite) ecommerce platform.
 - Production-ready settings (Postgres via `DATABASE_URL`, throttling, logging, HSTS)
 - **CI/CD** via GitHub Actions (lint, tests, Docker build, GHCR push, deploy hooks)
 
+## Database schema
+
+High-level entity relationships (Mermaid ER diagrams render on GitHub).
+
+### Overview
+
+```mermaid
+erDiagram
+    User ||--o| Cart : has
+    User ||--o{ Order : places
+    User ||--o{ Transaction : pays
+    User ||--o{ CustomerLog : generates
+
+    Category ||--o{ Category : parent
+    Category ||--o{ Product : categorizes
+
+    Product ||--o{ ProductImage : has
+    Product ||--o{ CartItem : in
+    Product ||--o{ OrderItem : ordered_as
+
+    Cart ||--o{ CartItem : contains
+
+    Order ||--o{ OrderItem : contains
+    Order ||--o{ Transaction : settled_by
+
+    Transaction ||--o| Transaction : refunds
+```
+
+### Catalog domain
+
+```mermaid
+erDiagram
+    Category {
+        bigint id PK
+        string name UK
+        string slug UK
+        bigint parent_id FK
+        bool is_active
+        datetime created_at
+    }
+
+    Product {
+        bigint id PK
+        string name
+        string slug UK
+        string sku UK
+        text description
+        decimal price
+        decimal compare_at_price
+        decimal cost_price
+        string currency
+        bool track_inventory
+        int stock_quantity
+        int low_stock_threshold
+        bigint category_id FK
+        string status
+        bool is_featured
+        bool is_digital
+        json attributes
+        datetime created_at
+        datetime updated_at
+    }
+
+    ProductImage {
+        bigint id PK
+        bigint product_id FK
+        string image
+        string alt_text
+        bool is_primary
+        int sort_order
+    }
+
+    Category ||--o{ Category : parent
+    Category ||--o{ Product : category
+    Product ||--o{ ProductImage : images
+```
+
+### Commerce domain (cart → order → payment)
+
+```mermaid
+erDiagram
+    User {
+        bigint id PK
+        string email UK
+        string username UK
+        string telephone_no UK
+        string role
+        bool is_admin
+        bool is_staff
+        datetime created_at
+    }
+
+    Cart {
+        bigint id PK
+        bigint user_id FK UK
+        datetime created_at
+        datetime updated_at
+    }
+
+    CartItem {
+        bigint id PK
+        bigint cart_id FK
+        bigint product_id FK
+        int quantity
+    }
+
+    Order {
+        bigint id PK
+        string order_number UK
+        bigint user_id FK
+        string status
+        decimal subtotal
+        decimal shipping_cost
+        decimal tax_amount
+        decimal discount
+        decimal total
+        string currency
+        json shipping_address
+        json billing_address
+        datetime created_at
+        datetime paid_at
+    }
+
+    OrderItem {
+        bigint id PK
+        bigint order_id FK
+        bigint product_id FK
+        string product_name
+        string sku
+        int quantity
+        decimal unit_price
+        decimal total_price
+    }
+
+    Transaction {
+        bigint id PK
+        string transaction_id UK
+        bigint order_id FK
+        bigint user_id FK
+        string type
+        string status
+        string provider
+        decimal amount
+        string currency
+        string provider_payment_id
+        bigint parent_transaction_id FK
+        datetime created_at
+        datetime completed_at
+    }
+
+    User ||--o| Cart : cart
+    Cart ||--o{ CartItem : items
+    Product ||--o{ CartItem : product
+    User ||--o{ Order : orders
+    Order ||--o{ OrderItem : items
+    Product ||--o{ OrderItem : product
+    User ||--o{ Transaction : transactions
+    Order ||--o{ Transaction : transactions
+    Transaction ||--o| Transaction : parent
+```
+
+### Activity log
+
+```mermaid
+erDiagram
+    User ||--o{ CustomerLog : logs
+
+    CustomerLog {
+        bigint id PK
+        bigint user_id FK
+        string action
+        text description
+        string ip_address
+        string user_agent
+        json metadata
+        datetime created_at
+    }
+```
+
+### Entity summary
+
+| Model | Purpose | Key relations |
+|-------|---------|----------------|
+| **User** | Auth identity (`email` as username) | 1→1 Cart, 1→N Orders, Transactions, Logs |
+| **Category** | Hierarchical catalog | Self FK `parent`, 1→N Products |
+| **Product** | Sellable SKU + inventory | FK Category, 1→N Images / CartItems / OrderItems |
+| **ProductImage** | Gallery; at most one primary per product | FK Product |
+| **Cart** / **CartItem** | Pre-checkout basket | User 1→1 Cart; unique `(cart, product)` |
+| **Order** / **OrderItem** | Snapshot at checkout | User FK (PROTECT); line items store name/sku/price |
+| **Transaction** | Payments & refunds | Order FK; optional self-FK for refunds |
+| **CustomerLog** | Audit trail (login, cart, payments, …) | Optional User FK |
+
+### Notable indexes (performance)
+
+- **Product**: `(status, name)`, `(status, is_featured)`, `(category, status)`, `(status, price)`, `(status, stock_quantity)`
+- **Order**: `(user, -created_at)`, `(user, status)`, `(status, -created_at)`
+- **Transaction**: `(order, status)`, `(provider, provider_payment_id)`, `(user, status, -created_at)`
+- **CustomerLog**: `(user, action)`, `(action, -created_at)`
+
+Source of truth: `backend/src/app/models.py`.
+
 ## CI/CD
 
 | Workflow | Trigger | What it does |
