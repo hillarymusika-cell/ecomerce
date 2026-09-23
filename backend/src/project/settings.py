@@ -137,7 +137,6 @@ ASGI_APPLICATION = "project.asgi.application"
 
 # ---------------------------------------------------------------------------
 # Database – SQLite by default; set DATABASE_URL for Postgres
-# e.g. postgres://user:pass@host:5432/dbname
 # ---------------------------------------------------------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
@@ -163,16 +162,51 @@ else:
         }
     }
 
-# Optional local memory cache (swap for Redis in production)
-CACHES = {
-    "default": {
-        "BACKEND": os.environ.get(
-            "CACHE_BACKEND",
-            "django.core.cache.backends.locmem.LocMemCache",
-        ),
-        "LOCATION": os.environ.get("CACHE_LOCATION", "ecomerce"),
-    }
+# ---------------------------------------------------------------------------
+# Cache – Redis when REDIS_URL is set; LocMem otherwise (single-process dev)
+# DRF throttles and catalog cache-aside share this backend.
+# ---------------------------------------------------------------------------
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+CACHE_KEY_PREFIX = os.environ.get("CACHE_KEY_PREFIX", "ecomerce")
+CACHE_DEFAULT_TTL = int(os.environ.get("CACHE_DEFAULT_TTL", "300"))
+
+# TTLs used by app.cache helpers (seconds)
+CACHE_TTL = {
+    "product": int(os.environ.get("CACHE_PRODUCT_TTL", "300")),
+    "product_list": int(os.environ.get("CACHE_PRODUCT_LIST_TTL", "120")),
+    "category": int(os.environ.get("CACHE_CATEGORY_TTL", "1800")),
+    "dashboard": int(os.environ.get("CACHE_DASHBOARD_TTL", "60")),
 }
+
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                # Fail open: if Redis is down, fall through to DB instead of 500s
+                "IGNORE_EXCEPTIONS": True,
+                "SOCKET_CONNECT_TIMEOUT": 2,
+                "SOCKET_TIMEOUT": 2,
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 50,
+                    "retry_on_timeout": True,
+                },
+            },
+            "KEY_PREFIX": CACHE_KEY_PREFIX,
+            "TIMEOUT": CACHE_DEFAULT_TTL,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": os.environ.get("CACHE_LOCATION", "ecomerce"),
+            "TIMEOUT": CACHE_DEFAULT_TTL,
+            "KEY_PREFIX": CACHE_KEY_PREFIX,
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -217,7 +251,6 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     X_FRAME_OPTIONS = "DENY"
-    # Trust proxy headers when behind a reverse proxy
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH", "")
@@ -264,6 +297,11 @@ LOGGING = {
         "app": {
             "handlers": ["console"],
             "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "django_redis": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },
