@@ -108,12 +108,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
 
 # Workers/threads tunable via env at orchestrator level if needed
-CMD ["gunicorn", "project.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "3", \
-     "--threads", "2", \
-     "--timeout", "60", \
-     "--graceful-timeout", "30", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--capture-output"]
+CMD ["sh", "-c", "gunicorn project.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 2 --timeout 60 --graceful-timeout 30 --access-logfile - --error-logfile - --capture-output"]     
