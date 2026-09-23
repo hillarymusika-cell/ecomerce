@@ -26,6 +26,10 @@ export default function Footer() {
           <Link to="/register">Create account</Link>
         </div>
       </div>
+      <div>
+          <h4>Privacy policy</h4>
+          <Link to="/privacy">Privacy Policy</Link>
+      </div>
       <div className="container footer-bottom">
         © {new Date().getFullYear()} Adams Collection. All rights reserved.
       </div>
