@@ -11,6 +11,33 @@ Django REST Framework + React (Vite) ecommerce platform.
 - Admin dashboard API
 - Health check endpoint
 - Production-ready settings (Postgres via `DATABASE_URL`, throttling, logging, HSTS)
+- **CI/CD** via GitHub Actions (lint, tests, Docker build, GHCR push, deploy hooks)
+
+## CI/CD
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| **CI** | push / PR to `main` | Backend lint + migrate + pytest; frontend build; Docker build on push |
+| **CD – Deploy** | after successful CI on `main`, or manual | Build & push image to `ghcr.io/<org>/ecomerce/backend`, optional webhook deploy |
+
+### Enable deploy
+
+1. **Packages**: image is pushed to GitHub Container Registry (`ghcr.io`).
+2. **Environments**: create GitHub environments `staging` and `production` (Settings → Environments).
+3. **Optional secrets**:
+   - `DEPLOY_WEBHOOK_URL` – POST target for deploy notifications
+   - `DEPLOY_WEBHOOK_TOKEN` – Bearer token for the webhook
+4. **Optional variables**: `STAGING_URL`, `PRODUCTION_URL` (shown on environment page).
+
+Manual deploy: **Actions → CD – Deploy → Run workflow** → choose `staging` or `production`.
+
+### Local Docker
+
+```bash
+docker compose up --build
+# API: http://localhost:8000
+# Health: http://localhost:8000/health/
+```
 
 ## Backend setup
 
@@ -28,8 +55,6 @@ python manage.py runserver
 ```
 
 ### Production database
-
-Set in `.env`:
 
 ```env
 DATABASE_URL=postgres://user:password@host:5432/ecomerce
@@ -74,3 +99,11 @@ npm run dev
 | GET/PATCH | `/api/admin/orders/` | |
 
 Admin UI: `/admin/`
+
+## Tests
+
+```bash
+cd backend/src
+pip install pytest pytest-django
+pytest app/tests/ -v
+```

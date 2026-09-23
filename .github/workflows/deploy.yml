@@ -1,0 +1,135 @@
+name: CD – Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: CI passed
+        run: echo "CI succeeded – proceeding with deploy"
+
+  build-and-push:
+    name: Build & push image
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' ||
+      github.event_name == 'workflow_run'
+
+    steps:
+      - name: Deploy notice
+        run: |
+          echo "Image ready: ${{ needs.build-and-push.outputs.image }}"
+          echo "Configure STAGING deploy secrets to enable automatic rollout."
+          echo "Supported hooks:"
+          echo "  - secrets.DEPLOY_WEBHOOK_URL  (POST with image tag)"
+          echo "  - secrets.SSH_HOST + SSH_KEY  (ssh deploy script)"
+
+      - name: Webhook deploy (optional)
+        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+        run: |
+          curl -fsS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+            -d "{\"image\":\"$IMAGE\",\"environment\":\"staging\",\"sha\":\"${{ github.sha }}\"}"
+
+  deploy-production:
+    name: Deploy production
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+
+    steps:
+      - name: Deploy notice
+        run: |
+          echo "Production deploy for image: ${{ needs.build-and-push.outputs.image }}"
+
+      - name: Webhook deploy (optional)
+        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+        run: |
+          curl -fsS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+            -d "{\"image\":\"$IMAGE\",\"environment\":\"production\",\"sha\":\"${{ github.sha }}\"}"
