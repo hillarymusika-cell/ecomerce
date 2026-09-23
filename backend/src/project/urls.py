@@ -22,6 +22,7 @@ from app.api_view import (
     OrderViewSet,
     CategoryViewSet,
     AdminDashboardView,
+    StaffDashboardView,
     AdminUserViewSet,
     AdminOrderViewSet,
     HealthCheckView,
@@ -62,8 +63,9 @@ urlpatterns = [
         name="cart-item",
     ),
     path("api/cart/clear/", CartViewSet.as_view({"delete": "clear"}), name="cart-clear"),
-    # Admin API
+    # Admin / staff analytics
     path("api/admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("api/staff/dashboard/", StaffDashboardView.as_view(), name="staff-dashboard"),
     path("api/admin/", include(admin_router.urls)),
     # Payments
     path("api/payments/webhook/", payment_webhook, name="payment-webhook"),
