@@ -45,9 +45,9 @@ class User(AbstractUser):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     default_ip = models.GenericIPAddressField(null=True, blank=True)
-    role = models.CharField(max_length=50, blank=True)
-    is_admin = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    role = models.CharField(max_length=50, blank=True, db_index=True)
+    is_admin = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = UserManager()
@@ -57,6 +57,11 @@ class User(AbstractUser):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["is_admin", "is_staff"]),
+            models.Index(fields=["role", "is_admin"]),
+        ]
 
     def __str__(self):
         return self.email or self.username
@@ -71,13 +76,18 @@ class Category(models.Model):
         null=True,
         blank=True,
         related_name="children",
+        db_index=True,
     )
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "Categories"
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["is_active", "parent"]),
+            models.Index(fields=["is_active", "name"]),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -95,17 +105,17 @@ class Product(models.Model):
         ARCHIVED = "archived", "Archived"
         OUT_OF_STOCK = "out_of_stock", "Out of Stock"
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(max_length=270, unique=True, blank=True)
     sku = models.CharField(max_length=64, unique=True, db_index=True)
     description = models.TextField(blank=True)
     short_description = models.CharField(max_length=500, blank=True)
-    price = models.DecimalField(max_digits=12, decimal_places=2)
+    price = models.DecimalField(max_digits=12, decimal_places=2, db_index=True)
     compare_at_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default="USD")
     track_inventory = models.BooleanField(default=True)
-    stock_quantity = models.PositiveIntegerField(default=0)
+    stock_quantity = models.PositiveIntegerField(default=0, db_index=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
     category = models.ForeignKey(
         Category,
@@ -113,6 +123,7 @@ class Product(models.Model):
         null=True,
         blank=True,
         related_name="products",
+        db_index=True,
     )
     status = models.CharField(
         max_length=20,
@@ -120,7 +131,7 @@ class Product(models.Model):
         default=Status.DRAFT,
         db_index=True,
     )
-    is_featured = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False, db_index=True)
     is_digital = models.BooleanField(default=False)
     meta_title = models.CharField(max_length=255, blank=True)
     meta_description = models.CharField(max_length=500, blank=True)
@@ -131,9 +142,21 @@ class Product(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
+            # Primary listing: active products ordered by name
+            models.Index(fields=["status", "name"]),
+            # Featured products
             models.Index(fields=["status", "is_featured"]),
-            models.Index(fields=["sku"]),
+            models.Index(fields=["is_featured", "status", "-created_at"]),
+            # Category browsing
             models.Index(fields=["category", "status"]),
+            models.Index(fields=["category", "status", "name"]),
+            # Recent / chronological
+            models.Index(fields=["status", "-created_at"]),
+            # Inventory management
+            models.Index(fields=["status", "stock_quantity"]),
+            models.Index(fields=["track_inventory", "stock_quantity"]),
+            # Price range filters
+            models.Index(fields=["status", "price"]),
         ]
 
     def save(self, *args, **kwargs):
@@ -194,14 +217,20 @@ class Product(models.Model):
 
 
 class ProductImage(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="images", db_index=True
+    )
     image = models.ImageField(upload_to="products/gallery/")
     alt_text = models.CharField(max_length=255, blank=True)
-    is_primary = models.BooleanField(default=False)
+    is_primary = models.BooleanField(default=False, db_index=True)
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["sort_order"]
+        indexes = [
+            models.Index(fields=["product", "is_primary"]),
+            models.Index(fields=["product", "sort_order"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["product"],
@@ -223,7 +252,9 @@ class ProductImage(models.Model):
 
 
 class Cart(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="cart")
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="cart", db_index=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -232,14 +263,19 @@ class Cart(models.Model):
 
 
 class CartItem(models.Model):
-    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    cart = models.ForeignKey(
+        Cart, on_delete=models.CASCADE, related_name="items", db_index=True
+    )
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, db_index=True)
     quantity = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("cart", "product")
+        indexes = [
+            models.Index(fields=["cart", "product"]),
+        ]
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
@@ -256,7 +292,9 @@ class Order(models.Model):
         REFUNDED = "refunded", "Refunded"
 
     order_number = models.CharField(max_length=32, unique=True, db_index=True)
-    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="orders")
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="orders", db_index=True
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -274,23 +312,43 @@ class Order(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            # User order history (most common query)
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["user", "status", "-created_at"]),
+            # Admin / status filtering
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["status", "paid_at"]),
+            # Reporting
+            models.Index(fields=["-created_at", "status"]),
+        ]
 
     def __str__(self):
         return f"Order {self.order_number} – {self.status}"
 
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name="items", db_index=True
+    )
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, db_index=True)
     product_name = models.CharField(max_length=255)
-    sku = models.CharField(max_length=64, blank=True)
+    sku = models.CharField(max_length=64, blank=True, db_index=True)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["order"]),
+            models.Index(fields=["product"]),
+            models.Index(fields=["sku"]),
+        ]
 
     def save(self, *args, **kwargs):
         self.total_price = self.unit_price * self.quantity
@@ -331,9 +389,12 @@ class Transaction(models.Model):
         related_name="transactions",
         null=True,
         blank=True,
+        db_index=True,
     )
-    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="transactions")
-    type = models.CharField(max_length=20, choices=Type.choices)
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="transactions", db_index=True
+    )
+    type = models.CharField(max_length=20, choices=Type.choices, db_index=True)
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -344,6 +405,7 @@ class Transaction(models.Model):
         max_length=20,
         choices=Provider.choices,
         default=Provider.OTHER,
+        db_index=True,
     )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")
@@ -357,10 +419,11 @@ class Transaction(models.Model):
         null=True,
         blank=True,
         related_name="refunds",
+        db_index=True,
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -368,6 +431,10 @@ class Transaction(models.Model):
             models.Index(fields=["order", "status"]),
             models.Index(fields=["provider", "provider_payment_id"]),
             models.Index(fields=["user", "type"]),
+            models.Index(fields=["user", "status", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["type", "status"]),
+            models.Index(fields=["provider", "status", "-created_at"]),
         ]
 
     def __str__(self):
@@ -408,10 +475,11 @@ class CustomerLog(models.Model):
         related_name="logs",
         null=True,
         blank=True,
+        db_index=True,
     )
     action = models.CharField(max_length=30, choices=Action.choices, db_index=True)
     description = models.TextField(blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
     user_agent = models.CharField(max_length=512, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -420,7 +488,9 @@ class CustomerLog(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "action"]),
-            models.Index(fields=["action", "created_at"]),
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["ip_address", "-created_at"]),
         ]
 
     def __str__(self):
