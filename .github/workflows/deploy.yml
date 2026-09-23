@@ -28,7 +28,7 @@ jobs:
   gate:
     name: CI gate
     runs-on: ubuntu-latest
-    if: >
+    if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
@@ -109,8 +109,8 @@ jobs:
     environment:
       name: staging
       url: ${{ vars.STAGING_URL }}
-    if: >
-      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' ||
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
       github.event_name == 'workflow_run'
 
     steps:
@@ -121,15 +121,19 @@ jobs:
           echo "Configure secrets.DEPLOY_WEBHOOK_URL for automatic rollout."
 
       - name: Webhook deploy (optional)
-        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
         env:
           WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
           BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
           FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
         run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "No DEPLOY_WEBHOOK_URL secret — skip webhook"
+            exit 0
+          fi
           curl -fsS -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+            -H "Authorization: Bearer $WEBHOOK_TOKEN" \
             -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"staging\",\"sha\":\"${{ github.sha }}\"}"
 
   deploy-production:
@@ -149,13 +153,17 @@ jobs:
           echo "Frontend: ${{ needs.build-and-push.outputs.frontend_image }}"
 
       - name: Webhook deploy (optional)
-        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
         env:
           WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
           BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
           FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
         run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "No DEPLOY_WEBHOOK_URL secret — skip webhook"
+            exit 0
+          fi
           curl -fsS -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+            -H "Authorization: Bearer $WEBHOOK_TOKEN" \
             -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"production\",\"sha\":\"${{ github.sha }}\"}"
