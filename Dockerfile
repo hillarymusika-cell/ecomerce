@@ -47,9 +47,10 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     && pip install -r /build/requirements.txt \
     && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true \
     && find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true \
-    && find /opt/venv -type f -name "*.pyo" -delete 2>/dev/null || true \
-    && find /opt/venv -type d -name "tests" -path "*/site-packages/*" -exec rm -rf {} + 2>/dev/null || true \
-    && find /opt/venv -type d -name "test" -path "*/site-packages/*" -exec rm -rf {} + 2>/dev/null || true
+    && find /opt/venv -type f -name "*.pyo" -delete 2>/dev/null || true
+    # NOTE: do NOT delete site-packages/*/test or */tests — that removes
+    # Django's django/test package and breaks djangorestframework-simplejwt
+    # (imports django.test.signals) during collectstatic and at runtime.
 
 # -----------------------------------------------------------------------------
 # runtime: minimal footprint, non-root, production-ready
@@ -108,4 +109,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
 
 # Workers/threads tunable via env at orchestrator level if needed
-CMD ["sh", "-c", "gunicorn project.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 2 --timeout 60 --graceful-timeout 30 --access-logfile - --error-logfile - --capture-output"]     
+CMD ["sh", "-c", "gunicorn project.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 2 --timeout 60 --graceful-timeout 30 --access-logfile - --error-logfile - --capture-output"]
