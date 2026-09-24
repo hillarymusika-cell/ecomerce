@@ -75,11 +75,12 @@ img { max-width: 100%; display: block; }
   min-height: 64px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 .nav-links {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  margin-left: 8px;
   margin-right: auto;
 }
 .nav-links a {
@@ -98,7 +99,17 @@ img { max-width: 100%; display: block; }
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.nav-action-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
 }
 .nav-icon-btn {
   display: inline-flex;
@@ -119,20 +130,24 @@ img { max-width: 100%; display: block; }
 }
 .nav-icon-btn .badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 2px;
+  right: 2px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   background: var(--accent);
   color: #052e1c;
   border-radius: 99px;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 800;
   font-family: var(--font-sans);
   display: grid;
   place-items: center;
   line-height: 1;
+}
+.nav-join {
+  margin-left: 4px;
+  gap: 6px;
 }
 .nav-toggle {
   display: none;
@@ -144,6 +159,7 @@ img { max-width: 100%; display: block; }
   border-radius: 10px;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 .nav-mobile {
   display: none;
@@ -167,6 +183,12 @@ img { max-width: 100%; display: block; }
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
 }
+.nav-mobile-btn {
+  margin-top: 8px;
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 8px;
+}
 
 .brand {
   display: inline-flex;
@@ -174,6 +196,7 @@ img { max-width: 100%; display: block; }
   gap: 10px;
   font-weight: 700;
   color: #fff;
+  flex-shrink: 0;
 }
 .brand-logo {
   width: 40px;
@@ -241,8 +264,16 @@ img { max-width: 100%; display: block; }
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
+.navbar .button.small {
+  background: #fff;
+  color: var(--brand);
+  border: 0;
+}
+.navbar .button.small:hover {
+  background: #f1f5f9;
+}
 .button.small { padding: 8px 12px; font-size: 0.82rem; }
-.button.full { width: 100%; }
+.button.full { width: 100%; min-height: 48px; }
 .button.icon-only {
   width: 40px;
   height: 40px;
@@ -307,7 +338,6 @@ img { max-width: 100%; display: block; }
   letter-spacing: 0.14em;
 }
 
-/* Hero logo: circular + float / glow */
 .hero-logo-wrap {
   position: relative;
   width: min(168px, 55vw);
@@ -354,14 +384,8 @@ img { max-width: 100%; display: block; }
 }
 
 @keyframes hero-ring {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 1;
-  }
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.06); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -531,7 +555,8 @@ label select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 11px 13px;
+  padding: 12px 14px;
+  min-height: 46px;
   outline: none;
   background: var(--surface);
   font-family: var(--font-sans);
@@ -707,37 +732,95 @@ label textarea:focus {
   font-size: 0.875rem;
   margin-bottom: 14px;
 }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 .alert {
   padding: 11px 13px;
   background: var(--danger-soft);
   color: var(--danger);
   border-radius: var(--radius-sm);
-  margin: 10px 0;
+  margin: 0 0 14px;
   font-size: 0.875rem;
 }
+
+/* ——— Auth (responsive) ——— */
 .auth-page {
   min-height: calc(100vh - 140px);
   display: grid;
   place-items: center;
-  padding: 40px 16px;
+  padding: clamp(24px, 5vw, 48px) 16px;
+  width: 100%;
 }
-.auth-card { width: min(100%, 400px); }
-.auth-card.wide { width: min(100%, 560px); }
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 32px);
+}
+.auth-card.wide {
+  max-width: 560px;
+}
+.auth-head {
+  margin-bottom: 20px;
+}
+.auth-head .eyebrow {
+  display: block;
+  margin-bottom: 6px;
+}
 .auth-card h1 {
   font-family: var(--font-display);
-  font-size: 1.85rem;
+  font-size: clamp(1.5rem, 4vw, 1.85rem);
   font-weight: 600;
   letter-spacing: -0.025em;
-  margin: 4px 0;
+  margin: 0;
 }
-.auth-card p {
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.auth-footer {
   color: var(--muted);
   text-align: center;
-  margin-top: 14px;
+  margin: 18px 0 0;
   font-size: 0.9rem;
 }
-.auth-card p a { color: var(--brand); font-weight: 700; }
+.auth-footer a {
+  color: var(--brand);
+  font-weight: 700;
+}
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-field input {
+  width: 100%;
+  padding-right: 48px;
+}
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.password-toggle:hover {
+  color: var(--ink);
+  background: var(--bg);
+}
 
 .orders { display: grid; gap: 10px; margin-top: 20px; }
 .order-card {
@@ -851,6 +934,7 @@ label textarea:focus {
 .toast.error { background: var(--danger); }
 .toast.success { background: #065f46; }
 
+/* ——— Breakpoints ——— */
 @media (max-width: 900px) {
   .hero-content,
   .cart-layout,
@@ -862,19 +946,40 @@ label textarea:focus {
   }
   .nav-links { display: none; }
   .nav-toggle { display: inline-flex; }
+  .nav-actions { gap: 6px; }
 }
+
 @media (max-width: 650px) {
   .product-grid,
   .skeleton-grid { grid-template-columns: 1fr 1fr; }
   .hero-content,
   .cart-layout,
   .trust-strip,
-  .footer-grid,
-  .two { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; }
   .search { flex-direction: column; }
   .hero { padding: 48px 0 40px; }
+  .brand-text { display: none; }
+  .nav-join span { display: none; }
+  .nav-join { padding: 0; width: 40px; height: 40px; }
 }
+
+@media (max-width: 520px) {
+  .two { grid-template-columns: 1fr; }
+  .auth-card,
+  .auth-card.wide {
+    max-width: 100%;
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+  .auth-page {
+    padding: 16px 12px 32px;
+    align-items: start;
+  }
+  .form-card label { margin-bottom: 12px; }
+}
+
 @media (max-width: 420px) {
   .product-grid,
   .skeleton-grid { grid-template-columns: 1fr; }
+  .nav-action-group { gap: 2px; padding: 2px; }
 }
