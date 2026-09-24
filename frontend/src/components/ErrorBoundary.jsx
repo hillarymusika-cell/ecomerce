@@ -1,9 +1,7 @@
 import { Component } from "react";
 import { Link } from "react-router-dom";
+import { AlertTriangle, Home, RotateCcw } from "lucide-react";
 
-/**
- * Catches render errors in the subtree and shows a recovery UI.
- */
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -30,7 +28,7 @@ export default class ErrorBoundary extends Component {
         <section className="section container">
           <div className="empty error-state" role="alert">
             <div className="empty-icon" aria-hidden="true">
-              ⚠
+              <AlertTriangle size={22} />
             </div>
             <h1>Something went wrong</h1>
             <p>
@@ -44,9 +42,11 @@ export default class ErrorBoundary extends Component {
             </p>
             <div className="empty-actions">
               <button type="button" className="button" onClick={this.handleReset}>
+                <RotateCcw size={16} aria-hidden />
                 Try again
               </button>
               <Link className="button ghost" to="/" onClick={this.handleReset}>
+                <Home size={16} aria-hidden />
                 Go home
               </Link>
             </div>

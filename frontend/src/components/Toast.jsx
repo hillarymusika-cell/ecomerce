@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState } from "react";
+import { CheckCircle2, AlertCircle, X } from "lucide-react";
 
 const ToastContext = createContext(null);
 
@@ -26,8 +27,13 @@ export function ToastProvider({ children }) {
       <div className="toast-container" aria-live="polite" aria-relevant="additions">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.type}`} role="status">
-            <span>
-              {t.type === "success" ? "✓" : "!"} {t.message}
+            <span className="toast-body">
+              {t.type === "success" ? (
+                <CheckCircle2 size={16} aria-hidden />
+              ) : (
+                <AlertCircle size={16} aria-hidden />
+              )}
+              {t.message}
             </span>
             <button
               type="button"
@@ -35,7 +41,7 @@ export function ToastProvider({ children }) {
               aria-label="Dismiss"
               onClick={() => dismiss(t.id)}
             >
-              ×
+              <X size={16} />
             </button>
           </div>
         ))}
@@ -46,8 +52,6 @@ export function ToastProvider({ children }) {
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) {
-    return () => {};
-  }
+  if (!ctx) return () => {};
   return ctx;
 }
