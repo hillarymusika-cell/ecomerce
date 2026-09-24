@@ -57,6 +57,12 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 FROM nginx:1.27-alpine AS runtime
 
+# Patch OS packages with known CRITICAL fixes (e.g. openssl CVE-2026-31789).
+# nginx:1.27-alpine may lag Alpine security updates; upgrade in place.
+RUN apk update \
+    && apk upgrade --no-cache libssl3 libcrypto3 \
+    && rm -rf /var/cache/apk/*
+
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
