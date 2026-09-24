@@ -6,7 +6,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ToastProvider } from "./components/Toast";
 import "./index.css";
-import "./robust.css";
+import "./ui.css";
 import "./dashboard.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
