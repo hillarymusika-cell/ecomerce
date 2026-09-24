@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { ShoppingCart, LogIn } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "./Toast";
@@ -42,6 +43,14 @@ export default function ProductCard({ product }) {
     product.compare_at_price &&
     Number(product.compare_at_price) > Number(product.price);
 
+  const label = !product.in_stock
+    ? "Sold out"
+    : adding
+      ? "Adding…"
+      : !isAuthenticated
+        ? "Log in"
+        : "Add";
+
   return (
     <article className="product-card">
       <Link to={`/products/${product.slug}`} className="product-image">
@@ -71,14 +80,20 @@ export default function ProductCard({ product }) {
           disabled={!product.in_stock || adding}
           onClick={handleAdd}
           aria-busy={adding}
-        >
-          {!product.in_stock
-            ? "Out of stock"
-            : adding
-              ? "Adding…"
+          aria-label={
+            !product.in_stock
+              ? "Out of stock"
               : !isAuthenticated
-                ? "Login to buy"
-                : "Add to cart"}
+                ? "Log in to buy"
+                : `Add ${product.name} to cart`
+          }
+        >
+          {!product.in_stock ? null : !isAuthenticated ? (
+            <LogIn size={15} strokeWidth={2.25} />
+          ) : (
+            <ShoppingCart size={15} strokeWidth={2.25} />
+          )}
+          {label}
         </button>
       </div>
     </article>

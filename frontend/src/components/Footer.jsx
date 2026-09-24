@@ -7,15 +7,15 @@ export default function Footer() {
       <div className="container footer-grid">
         <div>
           <div className="footer-brand">
-            <img src={LOGO_SRC} alt="Adams Collection" className="footer-logo" />
+            <img src={LOGO_SRC} alt="" className="footer-logo" />
             <div>
-              <div className="brand">Adams Collection</div>
+              <div className="brand" style={{ color: "#fff" }}>
+                Adams Collection
+              </div>
               <p className="tagline">Style · Quality · You</p>
             </div>
           </div>
-          <p className="footer-desc">
-            Curated fashion and lifestyle pieces — shop with confidence.
-          </p>
+          <p className="footer-desc">Curated fashion and lifestyle.</p>
         </div>
         <div>
           <h4>Shop</h4>
@@ -25,16 +25,16 @@ export default function Footer() {
         <div>
           <h4>Account</h4>
           <Link to="/login">Login</Link>
-          <Link to="/register">Create account</Link>
+          <Link to="/register">Join</Link>
           <Link to="/orders">Orders</Link>
         </div>
         <div>
           <h4>Legal</h4>
-          <Link to="/privacy">Privacy Policy</Link>
+          <Link to="/privacy">Privacy</Link>
         </div>
       </div>
       <div className="container footer-bottom">
-        © {new Date().getFullYear()} Adams Collection. All rights reserved.
+        © {new Date().getFullYear()} Adams Collection
       </div>
     </footer>
   );
