@@ -1,22 +1,4 @@
-/* Clean UI layer — flat colors, Lucide-friendly icon boxes */
-:root {
-  --bg: #f7f7f8;
-  --surface: #ffffff;
-  --ink: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --brand: #111827;
-  --brand-soft: #1f2937;
-  --accent: #059669;
-  --accent-soft: #ecfdf5;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(17, 24, 39, 0.05), 0 1px 3px rgba(17, 24, 39, 0.08);
-  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
-}
+/* UI helpers only — palette lives in index.css (logo teal/sage) */
 
 .icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .icon svg { width: 1em; height: 1em; stroke-width: 1.75; }
@@ -39,9 +21,9 @@
 .trust-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 50%;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: #005040;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -51,7 +33,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: #f3f4f6;
+  background: var(--accent-soft);
   color: var(--muted);
   display: grid;
   place-items: center;
@@ -114,7 +96,7 @@
 }
 .password-toggle:hover {
   color: var(--ink);
-  background: #f3f4f6;
+  background: var(--bg);
 }
 
 .quantity button {
