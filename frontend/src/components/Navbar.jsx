@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Shield,
   UserPlus,
+  Home,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -42,6 +43,9 @@ export default function Navbar() {
         </Link>
 
         <nav className="nav-links" aria-label="Main">
+          <NavLink to="/" end>
+            Home
+          </NavLink>
           <NavLink to="/products" end={false}>
             Shop
           </NavLink>
@@ -118,6 +122,9 @@ export default function Navbar() {
       </div>
 
       <div className={`container nav-mobile${open ? " open" : ""}`}>
+        <NavLink to="/" end onClick={close}>
+          <Home size={16} /> Home
+        </NavLink>
         <NavLink to="/products" onClick={close}>
           <Package size={16} /> Shop
         </NavLink>
