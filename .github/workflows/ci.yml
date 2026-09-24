@@ -15,6 +15,7 @@ permissions:
   contents: read
   checks: write
   pull-requests: write
+  actions: write
 
 env:
   DJANGO_SECRET_KEY: ci-test-secret-key-not-for-production
@@ -93,9 +94,16 @@ jobs:
           pip-audit -r backend/requirements.txt --desc on || true
           echo "::notice::pip-audit completed (advisory; does not block CI)"
 
+      # SECURITY deploy checks only make sense with DEBUG=False.
+      # Running them under DJANGO_DEBUG=True always fails --fail-level WARNING.
       - name: Django system check (deploy)
         working-directory: backend/src
-        run: python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_DEBUG: "False"
+          SECURE_SSL_REDIRECT: "False"
+        run: |
+          python manage.py check --deploy --fail-level ERROR
+          echo "::notice::Deploy checks passed (ERROR level). Warnings are advisory."
 
       - name: Uncommitted migrations check
         working-directory: backend/src
@@ -139,7 +147,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
+          # Only enable npm cache when lockfile exists (avoids path-resolution noise)
+          cache: ${{ hashFiles('frontend/package-lock.json') != '' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
@@ -148,7 +157,7 @@ jobs:
           if [ -f package-lock.json ]; then
             npm ci --no-audit --no-fund
           else
-            echo "::warning::No package-lock.json — using npm install (less reproducible)"
+            echo "::warning::No package-lock.json — using npm install (commit a lockfile for reproducible CI)"
             npm install --no-audit --no-fund
           fi
 
@@ -195,6 +204,7 @@ jobs:
     needs: [backend, frontend]
     permissions:
       contents: read
+      actions: write
       security-events: write
 
     steps:

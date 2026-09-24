@@ -32,6 +32,7 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       ref: ${{ steps.resolve.outputs.ref }}
+      allowed: ${{ steps.resolve.outputs.allowed }}
     steps:
       - name: Resolve commit & enforce CI success
         id: resolve
@@ -41,15 +42,22 @@ jobs:
             conclusion="${{ github.event.workflow_run.conclusion }}"
             sha="${{ github.event.workflow_run.head_sha }}"
             ref="${{ github.event.workflow_run.head_branch }}"
-            echo "workflow_run conclusion=$conclusion sha=$sha"
+            echo "workflow_run conclusion=$conclusion sha=$sha ref=$ref"
             if [ "$conclusion" != "success" ]; then
-              echo "::error::CI did not succeed (conclusion=$conclusion) — deploy blocked"
-              exit 1
+              echo "::warning::CI did not succeed (conclusion=$conclusion) — deploy blocked"
+              echo "allowed=false" >> "$GITHUB_OUTPUT"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              echo "ref=$ref" >> "$GITHUB_OUTPUT"
+              # Exit 0 so the workflow is green-but-skipped instead of a red CD failure
+              # when CI itself already reported the real error.
+              exit 0
             fi
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
           else
             sha="${{ github.sha }}"
             ref="${{ github.ref_name }}"
-            echo "manual dispatch sha=$sha"
+            echo "manual dispatch sha=$sha ref=$ref"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
@@ -57,11 +65,16 @@ jobs:
   build-and-push:
     name: Build & push images
     needs: gate
+    if: needs.gate.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     outputs:
       backend_image: ${{ steps.meta-backend.outputs.tags }}
       frontend_image: ${{ steps.meta-frontend.outputs.tags }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v4
@@ -127,8 +140,9 @@ jobs:
       name: staging
       url: ${{ vars.STAGING_URL }}
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
-      github.event_name == 'workflow_run'
+      needs.gate.outputs.allowed == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
+       github.event_name == 'workflow_run')
     steps:
       - name: Webhook deploy (fail-closed when configured)
         env:
@@ -177,7 +191,10 @@ jobs:
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    if: >-
+      needs.gate.outputs.allowed == 'true' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'production'
     steps:
       - name: Webhook deploy (required)
         env:
@@ -227,10 +244,18 @@ jobs:
       - name: Aggregate
         run: |
           set -euo pipefail
+          allowed="${{ needs.gate.outputs.allowed }}"
+          echo "allowed=$allowed"
           echo "gate=${{ needs.gate.result }}"
           echo "build=${{ needs.build-and-push.result }}"
           echo "staging=${{ needs.deploy-staging.result }}"
           echo "production=${{ needs.deploy-production.result }}"
+
+          if [ "$allowed" != "true" ]; then
+            echo "::notice::CD skipped — upstream CI did not succeed"
+            exit 0
+          fi
+
           for pair in "gate:${{ needs.gate.result }}" "build:${{ needs.build-and-push.result }}"; do
             r="${pair#*:}"
             if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
