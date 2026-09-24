@@ -301,7 +301,7 @@ jobs:
           echo "Frontend smoke OK"
 
       - name: Trivy scan backend (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ecomerce-backend:ci
           format: table
@@ -310,7 +310,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy scan frontend (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ecomerce-frontend:ci
           format: table
@@ -320,7 +320,7 @@ jobs:
 
       - name: Trivy HIGH report (advisory)
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ecomerce-backend:ci
           format: table
