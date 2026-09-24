@@ -6,6 +6,13 @@ import {
   register as registerApi,
   changePassword as changePasswordApi,
 } from "../api/authApi";
+import {
+  getAccessToken,
+  getRefreshToken,
+  saveTokens,
+  clearTokens,
+  getRememberPreference,
+} from "../utils/session";
 
 const AuthContext = createContext(null);
 
@@ -22,21 +29,23 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
+    clearTokens();
     setUser(null);
   }, []);
 
-  const saveSession = useCallback((data) => {
+  const saveSession = useCallback((data, remember = getRememberPreference()) => {
     const tokens = data.tokens || data;
-    if (tokens.access) localStorage.setItem("access_token", tokens.access);
-    if (tokens.refresh) localStorage.setItem("refresh_token", tokens.refresh);
+    saveTokens(
+      { access: tokens.access, refresh: tokens.refresh },
+      remember
+    );
     if (data.user) setUser(data.user);
   }, []);
 
-  const login = async (credentials, type = "unified") => {
+  const login = async (credentials, type = "unified", options = {}) => {
+    const remember = options.remember !== false;
     const { data } = await loginApi(credentials, type);
-    saveSession(data);
+    saveSession(data, remember);
     if (!data.user) {
       const me = await getMe();
       setUser(me.data);
@@ -44,14 +53,15 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const register = async (payload) => {
+  const register = async (payload, options = {}) => {
+    const remember = options.remember !== false;
     const { data } = await registerApi(payload);
-    saveSession(data);
+    saveSession(data, remember);
     return data;
   };
 
   const logout = async () => {
-    const refresh = localStorage.getItem("refresh_token");
+    const refresh = getRefreshToken();
     try {
       if (refresh) await logoutApi(refresh);
     } catch {
@@ -63,12 +73,12 @@ export function AuthProvider({ children }) {
 
   const changePassword = async ({ current_password, new_password }) => {
     const { data } = await changePasswordApi({ current_password, new_password });
-    if (data.tokens) saveSession(data);
+    if (data.tokens) saveSession(data, getRememberPreference());
     return data;
   };
 
   const refreshUser = useCallback(async () => {
-    const access = localStorage.getItem("access_token");
+    const access = getAccessToken();
     if (!access) {
       setUser(null);
       return null;
@@ -84,7 +94,7 @@ export function AuthProvider({ children }) {
   }, [clearSession]);
 
   useEffect(() => {
-    const access = localStorage.getItem("access_token");
+    const access = getAccessToken();
     if (!access) {
       setLoading(false);
       return;

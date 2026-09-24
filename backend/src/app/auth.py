@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from .geo import apply_geo_to_user, lookup_geo, client_ip
 from .models import User, CustomerLog
 
 
@@ -32,7 +33,7 @@ class AuthService:
             user=user,
             action=action,
             description=description,
-            ip_address=request.META.get("REMOTE_ADDR"),
+            ip_address=client_ip(request) or request.META.get("REMOTE_ADDR"),
             user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:512],
         )
 
@@ -96,6 +97,11 @@ class RegisterView(BaseAuthView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Geo from IP — optional client overrides still accepted if sent
+        geo = lookup_geo(client_ip(request))
+        country = (data.get("country") or "").strip() or geo.get("country") or ""
+        city = (data.get("city") or "").strip() or geo.get("city") or ""
+
         try:
             with transaction.atomic():
                 user = User.objects.create_user(
@@ -103,8 +109,11 @@ class RegisterView(BaseAuthView):
                     username=username,
                     password=password,
                     telephone_no=telephone_no,
-                    country=data.get("country", "") or "",
-                    city=data.get("city", "") or "",
+                    country=country[:50],
+                    city=city[:50],
+                    latitude=geo.get("latitude"),
+                    longitude=geo.get("longitude"),
+                    default_ip=geo.get("default_ip"),
                 )
                 AuthService.log_action(
                     user, CustomerLog.Action.REGISTER, request, "New registration"
@@ -136,10 +145,8 @@ def _authenticate_user(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # USERNAME_FIELD is email — pass as username= for ModelBackend compatibility
     user = authenticate(request, username=email, password=password)
     if user is None:
-        # fallback if backend accepts email=
         user = authenticate(request, email=email, password=password)
 
     if user is None:
@@ -157,10 +164,27 @@ def _authenticate_user(request):
     return user, None
 
 
+def _login_success(request, user, message="Login successful"):
+    login(request, user)
+    # Backfill geo if missing (non-blocking fail-soft)
+    try:
+        apply_geo_to_user(user, request, overwrite=False)
+    except Exception:
+        pass
+    AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
+    return Response(
+        {
+            "message": message,
+            "user": AuthService.user_payload(user),
+            "tokens": AuthService.get_tokens(user),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 class LoginView(BaseAuthView):
     """
     Unified login for customers and staff.
-    Returns role flags so the client can route accordingly.
     Optional body field: required_role = customer | staff | admin | superuser
     """
 
@@ -196,25 +220,11 @@ class LoginView(BaseAuthView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        login(request, user)
-        AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
-
-        tokens = AuthService.get_tokens(user)
-        return Response(
-            {
-                "message": "Login successful",
-                "user": AuthService.user_payload(user),
-                "tokens": tokens,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return _login_success(request, user)
 
 
-# Keep legacy role endpoints for backward compatibility
 class CustomerLoginView(BaseAuthView):
     def post(self, request):
-        request._full_data = {**request.data, "required_role": "customer"}
-        # DRF request.data is immutable-ish; call LoginView logic directly
         user, err = _authenticate_user(request)
         if err:
             return err
@@ -223,16 +233,7 @@ class CustomerLoginView(BaseAuthView):
                 {"error": "Please use the staff/admin login endpoint"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        login(request, user)
-        AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
-        return Response(
-            {
-                "message": "Login successful",
-                "user": AuthService.user_payload(user),
-                "tokens": AuthService.get_tokens(user),
-            },
-            status=status.HTTP_200_OK,
-        )
+        return _login_success(request, user)
 
 
 class StaffLoginView(BaseAuthView):
@@ -245,16 +246,7 @@ class StaffLoginView(BaseAuthView):
                 {"error": "You do not have staff privileges"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        login(request, user)
-        AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
-        return Response(
-            {
-                "message": "Staff login successful",
-                "user": AuthService.user_payload(user),
-                "tokens": AuthService.get_tokens(user),
-            },
-            status=status.HTTP_200_OK,
-        )
+        return _login_success(request, user, "Staff login successful")
 
 
 class AdminLoginView(BaseAuthView):
@@ -267,16 +259,7 @@ class AdminLoginView(BaseAuthView):
                 {"error": "You do not have admin privileges"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        login(request, user)
-        AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
-        return Response(
-            {
-                "message": "Admin login successful",
-                "user": AuthService.user_payload(user),
-                "tokens": AuthService.get_tokens(user),
-            },
-            status=status.HTTP_200_OK,
-        )
+        return _login_success(request, user, "Admin login successful")
 
 
 class SuperuserLoginView(BaseAuthView):
@@ -289,16 +272,7 @@ class SuperuserLoginView(BaseAuthView):
                 {"error": "You do not have superuser privileges"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        login(request, user)
-        AuthService.log_action(user, CustomerLog.Action.LOGIN, request)
-        return Response(
-            {
-                "message": "Superuser login successful",
-                "user": AuthService.user_payload(user),
-                "tokens": AuthService.get_tokens(user),
-            },
-            status=status.HTTP_200_OK,
-        )
+        return _login_success(request, user, "Superuser login successful")
 
 
 class LogoutView(APIView):
@@ -365,7 +339,6 @@ class ChangePasswordView(APIView):
             "Password changed",
         )
 
-        # Issue new tokens so old access tokens stop working after client stores them
         tokens = AuthService.get_tokens(user)
         return Response(
             {
@@ -377,7 +350,5 @@ class ChangePasswordView(APIView):
 
 
 class AuthTokenRefreshView(TokenRefreshView):
-    """Public refresh endpoint under /auth/token/refresh/"""
-
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]

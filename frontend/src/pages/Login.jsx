@@ -3,6 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getErrorMessage } from "../utils/errors";
+import {
+  getRememberPreference,
+  getRememberedEmail,
+  setRememberedEmail,
+} from "../utils/session";
 
 export default function Login() {
   const { login } = useAuth();
@@ -10,7 +15,11 @@ export default function Login() {
   const location = useLocation();
   const from = location.state?.from || "/";
 
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({
+    email: getRememberedEmail(),
+    password: "",
+  });
+  const [remember, setRemember] = useState(getRememberPreference());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -33,7 +42,9 @@ export default function Login() {
 
     setBusy(true);
     try {
-      await login({ email, password: form.password }, "unified");
+      await login({ email, password: form.password }, "unified", { remember });
+      if (remember) setRememberedEmail(email);
+      else setRememberedEmail("");
       navigate(from, { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Login failed. Check your credentials."));
@@ -91,6 +102,15 @@ export default function Login() {
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
+        </label>
+        <label className="remember-row">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            disabled={busy}
+          />
+          <span>Remember me</span>
         </label>
         <button className="button full" disabled={busy} aria-busy={busy}>
           {busy ? "Signing in…" : "Sign in"}

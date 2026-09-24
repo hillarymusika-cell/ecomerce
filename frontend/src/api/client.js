@@ -1,4 +1,10 @@
 import axios from "axios";
+import {
+  getAccessToken,
+  getRefreshToken,
+  updateAccessToken,
+  clearTokens,
+} from "../utils/session";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -8,7 +14,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const access = localStorage.getItem("access_token");
+  const access = getAccessToken();
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
   }
@@ -25,25 +31,31 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refresh = localStorage.getItem("refresh_token");
+    const refresh = getRefreshToken();
     if (!refresh) {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      clearTokens();
       return Promise.reject(error);
     }
 
     original._retry = true;
 
     try {
-      // Single-flight refresh so parallel 401s share one request
       if (!refreshPromise) {
         refreshPromise = axios
           .post(`${BASE_URL}/auth/token/refresh/`, { refresh })
           .then((res) => {
             const access = res.data.access;
-            localStorage.setItem("access_token", access);
+            updateAccessToken(access);
             if (res.data.refresh) {
-              localStorage.setItem("refresh_token", res.data.refresh);
+              // Keep refresh in same store as access
+              updateAccessToken(access);
+              const remember =
+                localStorage.getItem("auth_remember") !== "0";
+              if (remember) {
+                localStorage.setItem("refresh_token", res.data.refresh);
+              } else {
+                sessionStorage.setItem("refresh_token", res.data.refresh);
+              }
             }
             return access;
           })
@@ -56,8 +68,7 @@ api.interceptors.response.use(
       original.headers.Authorization = `Bearer ${access}`;
       return api(original);
     } catch {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      clearTokens();
       return Promise.reject(error);
     }
   }
