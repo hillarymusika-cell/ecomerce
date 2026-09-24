@@ -5,6 +5,9 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 import Loading from "../components/Loading";
+import EmptyState from "../components/EmptyState";
+import ImageWithFallback from "../components/ImageWithFallback";
+import { getErrorMessage } from "../utils/errors";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const imageUrl = (value) =>
@@ -12,7 +15,7 @@ const imageUrl = (value) =>
     ? value.startsWith("http")
       ? value
       : `${apiBase}${value}`
-    : "https://placehold.co/900x900?text=Product";
+    : null;
 
 export default function ProductDetails() {
   const { slug } = useParams();
@@ -22,12 +25,45 @@ export default function ProductDetails() {
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    getProduct(slug).then(({ data }) => setProduct(data));
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    setProduct(null);
+    getProduct(slug)
+      .then(({ data }) => {
+        if (!cancelled) setProduct(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, "Product not found"));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
-  if (!product) return <Loading />;
+  if (loading) return <Loading />;
+
+  if (error || !product) {
+    return (
+      <section className="section container">
+        <EmptyState
+          variant="error"
+          icon="!"
+          title="Product not found"
+          description={error || "This product may have been removed."}
+          actionLabel="Back to shop"
+          actionTo="/products"
+        />
+      </section>
+    );
+  }
 
   const handleAdd = async () => {
     if (!isAuthenticated) {
@@ -38,86 +74,89 @@ export default function ProductDetails() {
     try {
       await add(product.id, quantity);
       toast(`Added ${quantity} to cart`, "success");
-    } catch {
-      toast("Could not add to cart", "error");
+    } catch (err) {
+      toast(getErrorMessage(err, "Could not add to cart"), "error");
     } finally {
       setBusy(false);
     }
   };
 
+  const onSale =
+    product.compare_at_price &&
+    Number(product.compare_at_price) > Number(product.price);
+
+  const maxQty = product.stock_quantity
+    ? Math.max(1, Number(product.stock_quantity))
+    : 99;
+
   return (
     <section className="section container">
-      <Link className="back" to="/products">
-        ← Back to products
-      </Link>
-      <div className="detail-grid">
-        <div className="detail-image">
-          <img
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link to="/products">Shop</Link>
+        <span aria-hidden="true"> / </span>
+        <span>{product.name}</span>
+      </nav>
+
+      <div className="product-detail">
+        <div className="product-detail-image">
+          <ImageWithFallback
             src={imageUrl(product.primary_image_url)}
             alt={product.name}
           />
+          {!product.in_stock && <span className="product-badge out">Sold out</span>}
+          {product.in_stock && onSale && <span className="product-badge">Sale</span>}
         </div>
-        <div className="detail-content">
-          <span className="eyebrow">
-            {product.category_name || "Product"}
-          </span>
+        <div className="product-detail-info">
+          <span className="eyebrow">{product.category_name || "Product"}</span>
           <h1>{product.name}</h1>
-          <span className={`stock-pill ${product.in_stock ? "in" : "out"}`}>
-            {product.in_stock ? "In stock" : "Out of stock"}
-          </span>
-          <div className="price-large">
-            {product.currency || "UGX"}{" "}
-            {Number(product.price).toLocaleString()}
-            {product.compare_at_price &&
-              Number(product.compare_at_price) > Number(product.price) && (
-                <del
-                  style={{
-                    marginLeft: 12,
-                    fontSize: "1rem",
-                    color: "#94a3b8",
-                    fontWeight: 500,
-                  }}
-                >
-                  {Number(product.compare_at_price).toLocaleString()}
-                </del>
-              )}
+          <div className="product-row">
+            <strong className="price-lg">
+              {product.currency || "UGX"} {Number(product.price).toLocaleString()}
+            </strong>
+            {onSale && (
+              <del>{Number(product.compare_at_price).toLocaleString()}</del>
+            )}
           </div>
-          <p>
-            {product.description ||
-              product.short_description ||
-              "Quality product available in our store."}
-          </p>
-          <div className="quantity">
+          {product.description && (
+            <p className="product-desc">{product.description}</p>
+          )}
+          <div className="quantity detail-qty">
             <button
               type="button"
-              aria-label="Decrease quantity"
-              onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              aria-label="Decrease"
+              disabled={quantity <= 1}
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
             >
               −
             </button>
             <span>{quantity}</span>
             <button
               type="button"
-              aria-label="Increase quantity"
-              onClick={() => setQuantity(quantity + 1)}
+              aria-label="Increase"
+              disabled={quantity >= maxQty}
+              onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
             >
               +
             </button>
           </div>
           <button
             type="button"
-            className="button"
+            className="button full"
             disabled={!product.in_stock || busy}
             onClick={handleAdd}
+            aria-busy={busy}
           >
             {!product.in_stock
               ? "Out of stock"
-              : !isAuthenticated
-                ? "Login to buy"
-                : busy
-                  ? "Adding..."
+              : busy
+                ? "Adding…"
+                : !isAuthenticated
+                  ? "Login to buy"
                   : "Add to cart"}
           </button>
+          <Link className="button ghost full" to="/products" style={{ marginTop: 8 }}>
+            Continue shopping
+          </Link>
         </div>
       </div>
     </section>
