@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getErrorMessage } from "../utils/errors";
 
@@ -44,8 +45,10 @@ export default function Login() {
   return (
     <section className="auth-page">
       <form className="form-card auth-card" onSubmit={submit} noValidate>
-        <span className="eyebrow">WELCOME BACK</span>
-        <h1>Sign in</h1>
+        <header className="auth-head">
+          <span className="eyebrow">Welcome back</span>
+          <h1>Sign in</h1>
+        </header>
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -58,9 +61,11 @@ export default function Login() {
             name="email"
             required
             autoComplete="email"
+            inputMode="email"
             value={form.email}
             onChange={change}
             disabled={busy}
+            placeholder="you@example.com"
           />
         </label>
         <label>
@@ -74,6 +79,7 @@ export default function Login() {
               value={form.password}
               onChange={change}
               disabled={busy}
+              placeholder="••••••••"
             />
             <button
               type="button"
@@ -82,14 +88,14 @@ export default function Login() {
               aria-label={showPassword ? "Hide password" : "Show password"}
               tabIndex={-1}
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </label>
         <button className="button full" disabled={busy} aria-busy={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
-        <p>
+        <p className="auth-footer">
           New here? <Link to="/register">Create an account</Link>
         </p>
       </form>

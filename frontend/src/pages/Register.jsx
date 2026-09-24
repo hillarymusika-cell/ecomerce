@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getErrorMessage } from "../utils/errors";
 
@@ -65,101 +66,124 @@ export default function Register() {
   return (
     <section className="auth-page">
       <form className="form-card auth-card wide" onSubmit={submit} noValidate>
-        <span className="eyebrow">JOIN THE STORE</span>
-        <h1>Create account</h1>
+        <header className="auth-head">
+          <span className="eyebrow">Join the store</span>
+          <h1>Create account</h1>
+        </header>
         {error && (
           <div className="alert" role="alert">
             {error}
           </div>
         )}
-        <div className="two">
-          <label>
-            Username
-            <input
-              name="username"
-              required
-              autoComplete="username"
-              value={form.username}
-              onChange={change}
-              disabled={busy}
-            />
-          </label>
-          <label>
-            Telephone
-            <input
-              name="telephone_no"
-              required
-              autoComplete="tel"
-              value={form.telephone_no}
-              onChange={change}
-              disabled={busy}
-            />
-          </label>
-        </div>
-        <label>
-          Email
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-            value={form.email}
-            onChange={change}
-            disabled={busy}
-          />
-        </label>
-        <div className="two">
-          <label>
-            Password
-            <div className="password-field">
+        <div className="auth-fields">
+          <div className="two">
+            <label>
+              Username
               <input
-                type={showPassword ? "text" : "password"}
-                name="password"
+                name="username"
                 required
-                autoComplete="new-password"
-                minLength={8}
-                value={form.password}
+                autoComplete="username"
+                value={form.username}
                 onChange={change}
                 disabled={busy}
+                placeholder="username"
               />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                tabIndex={-1}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-          </label>
+            </label>
+            <label>
+              Telephone
+              <input
+                name="telephone_no"
+                required
+                autoComplete="tel"
+                inputMode="tel"
+                value={form.telephone_no}
+                onChange={change}
+                disabled={busy}
+                placeholder="+256…"
+              />
+            </label>
+          </div>
           <label>
-            Confirm password
+            Email
             <input
-              type={showPassword ? "text" : "password"}
-              name="password_confirm"
+              type="email"
+              name="email"
               required
-              autoComplete="new-password"
-              value={form.password_confirm}
+              autoComplete="email"
+              inputMode="email"
+              value={form.email}
               onChange={change}
               disabled={busy}
+              placeholder="you@example.com"
             />
           </label>
-        </div>
-        <div className="two">
-          <label>
-            Country
-            <input name="country" value={form.country} onChange={change} disabled={busy} />
-          </label>
-          <label>
-            City
-            <input name="city" value={form.city} onChange={change} disabled={busy} />
-          </label>
+          <div className="two">
+            <label>
+              Password
+              <div className="password-field">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  required
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={form.password}
+                  onChange={change}
+                  disabled={busy}
+                  placeholder="Min. 8 characters"
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </label>
+            <label>
+              Confirm password
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password_confirm"
+                required
+                autoComplete="new-password"
+                value={form.password_confirm}
+                onChange={change}
+                disabled={busy}
+                placeholder="Repeat password"
+              />
+            </label>
+          </div>
+          <div className="two">
+            <label>
+              Country
+              <input
+                name="country"
+                value={form.country}
+                onChange={change}
+                disabled={busy}
+                placeholder="Optional"
+              />
+            </label>
+            <label>
+              City
+              <input
+                name="city"
+                value={form.city}
+                onChange={change}
+                disabled={busy}
+                placeholder="Optional"
+              />
+            </label>
+          </div>
         </div>
         <button className="button full" disabled={busy} aria-busy={busy}>
           {busy ? "Creating…" : "Create account"}
         </button>
-        <p>
+        <p className="auth-footer">
           Already registered? <Link to="/login">Sign in</Link>
         </p>
       </form>

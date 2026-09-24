@@ -10,6 +10,7 @@ import {
   Package,
   LayoutDashboard,
   Shield,
+  UserPlus,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -41,53 +42,69 @@ export default function Navbar() {
         </Link>
 
         <nav className="nav-links" aria-label="Main">
-          <NavLink to="/products">Shop</NavLink>
+          <NavLink to="/products" end={false}>
+            Shop
+          </NavLink>
           {user && role === "customer" && <NavLink to="/orders">Orders</NavLink>}
           {isStaff && <NavLink to="/staff">Staff</NavLink>}
           {isAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
 
         <div className="nav-actions">
-          {(role === "customer" || !user) && (
-            <Link
-              className="nav-icon-btn"
-              to="/cart"
-              aria-label={count > 0 ? `Cart, ${count} items` : "Cart"}
-            >
-              <ShoppingCart size={18} strokeWidth={2} />
-              {count > 0 && <span className="badge">{count}</span>}
-            </Link>
-          )}
-          {user ? (
-            <>
+          <div className="nav-action-group">
+            {(role === "customer" || !user) && (
               <Link
                 className="nav-icon-btn"
-                to="/account"
-                aria-label={user.username || "Account"}
-                title={user.username}
+                to="/cart"
+                aria-label={count > 0 ? `Cart, ${count} items` : "Cart"}
+                title="Cart"
               >
-                <User size={18} strokeWidth={2} />
+                <ShoppingCart size={18} strokeWidth={2} />
+                {count > 0 && <span className="badge">{count > 99 ? "99+" : count}</span>}
               </Link>
-              <button
-                type="button"
-                className="nav-icon-btn"
-                onClick={signOut}
-                aria-label="Log out"
-                title="Log out"
-              >
-                <LogOut size={18} strokeWidth={2} />
-              </button>
-            </>
-          ) : (
-            <>
-              <Link className="nav-icon-btn" to="/login" aria-label="Log in" title="Log in">
-                <LogIn size={18} strokeWidth={2} />
-              </Link>
-              <Link className="button small" to="/register">
-                Join
-              </Link>
-            </>
-          )}
+            )}
+            {user ? (
+              <>
+                <Link
+                  className="nav-icon-btn"
+                  to="/account"
+                  aria-label="Account"
+                  title={user.username || "Account"}
+                >
+                  <User size={18} strokeWidth={2} />
+                </Link>
+                <button
+                  type="button"
+                  className="nav-icon-btn"
+                  onClick={signOut}
+                  aria-label="Log out"
+                  title="Log out"
+                >
+                  <LogOut size={18} strokeWidth={2} />
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  className="nav-icon-btn"
+                  to="/login"
+                  aria-label="Log in"
+                  title="Log in"
+                >
+                  <LogIn size={18} strokeWidth={2} />
+                </Link>
+                <Link
+                  className="button small nav-join"
+                  to="/register"
+                  title="Create account"
+                >
+                  <UserPlus size={14} strokeWidth={2.25} />
+                  <span>Join</span>
+                </Link>
+              </>
+            )}
+          </div>
+
           <button
             type="button"
             className="nav-toggle"
@@ -104,6 +121,12 @@ export default function Navbar() {
         <NavLink to="/products" onClick={close}>
           <Package size={16} /> Shop
         </NavLink>
+        {(role === "customer" || !user) && (
+          <NavLink to="/cart" onClick={close}>
+            <ShoppingCart size={16} /> Cart
+            {count > 0 ? ` (${count})` : ""}
+          </NavLink>
+        )}
         {user && role === "customer" && (
           <NavLink to="/orders" onClick={close}>
             <Package size={16} /> Orders
@@ -122,13 +145,12 @@ export default function Navbar() {
         {user ? (
           <>
             <NavLink to="/account" onClick={close}>
-              <User size={16} /> {user.username}
+              <User size={16} /> Account
             </NavLink>
             <button
               type="button"
-              className="button ghost small"
+              className="button ghost small nav-mobile-btn"
               onClick={signOut}
-              style={{ marginTop: 8, alignSelf: "flex-start" }}
             >
               <LogOut size={14} /> Log out
             </button>
@@ -139,7 +161,7 @@ export default function Navbar() {
               <LogIn size={16} /> Log in
             </NavLink>
             <NavLink to="/register" onClick={close}>
-              Join
+              <UserPlus size={16} /> Join
             </NavLink>
           </>
         )}
