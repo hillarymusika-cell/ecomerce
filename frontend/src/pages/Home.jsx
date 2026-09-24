@@ -3,21 +3,33 @@ import { useEffect, useState } from "react";
 import { getProducts } from "../api/productApi";
 import ProductGrid from "../components/ProductGrid";
 import Loading from "../components/Loading";
+import EmptyState from "../components/EmptyState";
 import LOGO_SRC from "../assets/logoData";
+import { getErrorMessage } from "../utils/errors";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError("");
     getProducts({ page_size: 8, featured: true })
       .then(({ data }) => setProducts(data.results || data))
       .catch(() =>
-        getProducts({ page_size: 8 }).then(({ data }) =>
-          setProducts(data.results || data)
-        )
+        getProducts({ page_size: 8 })
+          .then(({ data }) => setProducts(data.results || data))
+          .catch((err) => {
+            setProducts([]);
+            setError(getErrorMessage(err, "Could not load featured products"));
+          })
       )
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   return (
@@ -37,11 +49,7 @@ export default function Home() {
             </Link>
           </div>
           <div className="hero-card hero-card-logo">
-            <img
-              src={LOGO_SRC}
-              alt="Adams Collection"
-              className="hero-logo"
-            />
+            <img src={LOGO_SRC} alt="Adams Collection" className="hero-logo" />
             <span>STYLE · QUALITY · YOU</span>
           </div>
         </div>
@@ -77,12 +85,23 @@ export default function Home() {
         <div className="section-heading">
           <div>
             <span className="eyebrow">FEATURED</span>
-            <h2>Latest from the collection</h2>
+            <h2>Picked for you</h2>
           </div>
-          <Link to="/products">View all →</Link>
+          <Link className="button ghost" to="/products">
+            View all
+          </Link>
         </div>
         {loading ? (
           <Loading skeleton count={8} />
+        ) : error ? (
+          <EmptyState
+            variant="error"
+            icon="!"
+            title="Couldn’t load products"
+            description={error}
+            actionLabel="Retry"
+            onAction={load}
+          />
         ) : (
           <ProductGrid products={products} />
         )}
