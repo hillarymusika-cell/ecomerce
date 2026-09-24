@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { createOrder } from "../api/orderApi";
 import EmptyState from "../components/EmptyState";
@@ -62,7 +63,7 @@ export default function Checkout() {
     return (
       <section className="section container">
         <EmptyState
-          icon="◎"
+          icon={<ShoppingBag size={22} />}
           title="Nothing to checkout"
           description="Add items to your cart first."
           actionLabel="Browse products"
