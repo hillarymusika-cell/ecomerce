@@ -1,12 +1,15 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "./Toast";
+import ImageWithFallback from "./ImageWithFallback";
+import { getErrorMessage } from "../utils/errors";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function imageUrl(value) {
-  if (!value) return "https://placehold.co/800x800?text=Product";
+  if (!value) return null;
   return value.startsWith("http") ? value : `${apiBase}${value}`;
 }
 
@@ -14,6 +17,7 @@ export default function ProductCard({ product }) {
   const { add } = useCart();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
+  const [adding, setAdding] = useState(false);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -22,11 +26,15 @@ export default function ProductCard({ product }) {
       toast("Please log in to add items", "error");
       return;
     }
+    if (adding) return;
+    setAdding(true);
     try {
       await add(product.id, 1);
       toast("Added to cart", "success");
-    } catch {
-      toast("Could not add to cart", "error");
+    } catch (err) {
+      toast(getErrorMessage(err, "Could not add to cart"), "error");
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -37,10 +45,9 @@ export default function ProductCard({ product }) {
   return (
     <article className="product-card">
       <Link to={`/products/${product.slug}`} className="product-image">
-        <img
+        <ImageWithFallback
           src={imageUrl(product.primary_image_url)}
           alt={product.name}
-          loading="lazy"
         />
         {!product.in_stock && <span className="product-badge out">Sold out</span>}
         {product.in_stock && onSale && <span className="product-badge">Sale</span>}
@@ -61,14 +68,17 @@ export default function ProductCard({ product }) {
         <button
           type="button"
           className="button full"
-          disabled={!product.in_stock}
+          disabled={!product.in_stock || adding}
           onClick={handleAdd}
+          aria-busy={adding}
         >
           {!product.in_stock
             ? "Out of stock"
-            : !isAuthenticated
-              ? "Login to buy"
-              : "Add to cart"}
+            : adding
+              ? "Adding…"
+              : !isAuthenticated
+                ? "Login to buy"
+                : "Add to cart"}
         </button>
       </div>
     </article>
