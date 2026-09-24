@@ -46,7 +46,9 @@ export default function Home() {
             </Link>
           </div>
           <div className="hero-card">
-            <img src={LOGO_SRC} alt="Adams Collection" className="hero-logo" />
+            <div className="hero-logo-wrap" aria-hidden="true">
+              <img src={LOGO_SRC} alt="" className="hero-logo" />
+            </div>
             <span>Style · Quality · You</span>
           </div>
         </div>
