@@ -148,10 +148,7 @@ img { max-width: 100%; display: block; }
   place-items: center;
   line-height: 1;
 }
-.nav-join {
-  margin-left: 4px;
-  gap: 6px;
-}
+.nav-join { margin-left: 4px; gap: 6px; }
 .nav-toggle {
   display: none;
   background: transparent;
@@ -230,7 +227,6 @@ img { max-width: 100%; display: block; }
   color: var(--accent);
 }
 
-/* ——— Buttons ——— */
 .button {
   border: 0;
   background: var(--brand);
@@ -247,17 +243,10 @@ img { max-width: 100%; display: block; }
   gap: 8px;
   transition: background var(--transition), transform var(--transition);
 }
-.button:hover:not(:disabled) {
-  background: var(--brand-soft);
-}
+.button:hover:not(:disabled) { background: var(--brand-soft); }
 .button:disabled { opacity: 0.45; cursor: not-allowed; }
-.button.ghost {
-  background: #e8eeec;
-  color: var(--ink);
-}
-.button.ghost:hover:not(:disabled) {
-  background: #d0d8d8;
-}
+.button.ghost { background: #e8eeec; color: var(--ink); }
+.button.ghost:hover:not(:disabled) { background: #d0d8d8; }
 .navbar .button.ghost {
   background: transparent;
   color: #e0e8e0;
@@ -272,18 +261,11 @@ img { max-width: 100%; display: block; }
   color: var(--brand);
   border: 0;
 }
-.navbar .button.small:hover {
-  background: #eef2f0;
-}
+.navbar .button.small:hover { background: #eef2f0; }
 .button.small { padding: 8px 12px; font-size: 0.82rem; }
 .button.full { width: 100%; min-height: 48px; }
-.button.icon-only {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-}
+.button.icon-only { width: 40px; height: 40px; padding: 0; }
 
-/* ——— Hero ——— */
 .hero {
   background: var(--brand);
   color: #fff;
@@ -313,13 +295,8 @@ img { max-width: 100%; display: block; }
   line-height: 1.65;
   margin: 0 0 24px;
 }
-.hero .button {
-  background: #f8faf9;
-  color: var(--brand);
-}
-.hero .button:hover {
-  background: #eef2f0;
-}
+.hero .button { background: #f8faf9; color: var(--brand); }
+.hero .button:hover { background: #eef2f0; }
 .hero-card {
   min-height: 280px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -340,7 +317,6 @@ img { max-width: 100%; display: block; }
   font-size: 0.7rem;
   letter-spacing: 0.14em;
 }
-
 .hero-logo-wrap {
   position: relative;
   width: min(168px, 55vw);
@@ -368,7 +344,6 @@ img { max-width: 100%; display: block; }
     0 12px 32px rgba(0, 0, 0, 0.25);
   animation: hero-float 4s ease-in-out infinite;
 }
-
 @keyframes hero-float {
   0%, 100% {
     transform: translateY(0);
@@ -385,20 +360,15 @@ img { max-width: 100%; display: block; }
       0 0 36px rgba(8, 136, 104, 0.4);
   }
 }
-
 @keyframes hero-ring {
   0%, 100% { transform: scale(1); opacity: 0.7; }
   50% { transform: scale(1.06); opacity: 1; }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .hero-logo,
-  .hero-logo-wrap::before {
-    animation: none;
-  }
+  .hero-logo-wrap::before { animation: none; }
 }
 
-/* ——— Sections ——— */
 .section { padding: 56px 0; }
 .section-heading {
   display: flex;
@@ -425,7 +395,6 @@ img { max-width: 100%; display: block; }
   text-transform: uppercase;
 }
 
-/* ——— Trust strip ——— */
 .trust-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -467,7 +436,6 @@ img { max-width: 100%; display: block; }
   line-height: 1.4;
 }
 
-/* ——— Products ——— */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -535,17 +503,10 @@ img { max-width: 100%; display: block; }
   margin-bottom: 12px;
   font-family: var(--font-sans);
 }
-.product-row strong {
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.product-row del {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
+.product-row strong { font-weight: 700; letter-spacing: -0.02em; }
+.product-row del { color: var(--muted); font-size: 0.78rem; }
 .product-info .button { margin-top: auto; }
 
-/* ——— Forms / search ——— */
 .search {
   display: flex;
   gap: 10px;
@@ -655,7 +616,6 @@ label textarea:focus {
   font-weight: 700;
 }
 
-/* ——— Cart ——— */
 .cart-layout {
   display: grid;
   grid-template-columns: 1.5fr 0.5fr;
@@ -749,7 +709,6 @@ label textarea:focus {
   font-size: 0.875rem;
 }
 
-/* ——— Auth (responsive) ——— */
 .auth-page {
   min-height: calc(100vh - 140px);
   display: grid;
@@ -764,16 +723,9 @@ label textarea:focus {
   margin: 0 auto;
   padding: clamp(20px, 4vw, 32px);
 }
-.auth-card.wide {
-  max-width: 560px;
-}
-.auth-head {
-  margin-bottom: 20px;
-}
-.auth-head .eyebrow {
-  display: block;
-  margin-bottom: 6px;
-}
+.auth-card.wide { max-width: 560px; }
+.auth-head { margin-bottom: 20px; }
+.auth-head .eyebrow { display: block; margin-bottom: 6px; }
 .auth-card h1 {
   font-family: var(--font-display);
   font-size: clamp(1.5rem, 4vw, 1.85rem);
@@ -781,21 +733,14 @@ label textarea:focus {
   letter-spacing: -0.025em;
   margin: 0;
 }
-.auth-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
+.auth-fields { display: flex; flex-direction: column; gap: 0; }
 .auth-footer {
   color: var(--muted);
   text-align: center;
   margin: 18px 0 0;
   font-size: 0.9rem;
 }
-.auth-footer a {
-  color: var(--brand);
-  font-weight: 700;
-}
+.auth-footer a { color: var(--brand); font-weight: 700; }
 .password-field {
   position: relative;
   display: flex;
@@ -825,6 +770,29 @@ label textarea:focus {
   color: var(--ink);
   background: var(--bg);
 }
+.remember-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500 !important;
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 16px !important;
+  cursor: pointer;
+  user-select: none;
+}
+.remember-row input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  accent-color: var(--accent);
+  border-radius: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
 
 .orders { display: grid; gap: 10px; margin-top: 20px; }
 .order-card {
@@ -852,7 +820,6 @@ label textarea:focus {
   color: #005040;
 }
 
-/* ——— Footer ——— */
 .footer {
   background: var(--brand);
   color: #98a8a8;
@@ -938,7 +905,6 @@ label textarea:focus {
 .toast.error { background: var(--danger); }
 .toast.success { background: #005040; }
 
-/* ——— Breakpoints ——— */
 @media (max-width: 900px) {
   .hero-content,
   .cart-layout,
