@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { ShoppingCart, Menu, X, LogOut, User } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import LOGO_SRC from "../assets/logoData";
@@ -39,16 +40,20 @@ export default function Navbar() {
         <div className="nav-actions">
           {(role === "customer" || !user) && (
             <Link className="nav-icon" to="/cart" aria-label={`Cart, ${count} items`}>
-              Cart {count > 0 && <span>{count}</span>}
+              <ShoppingCart size={18} aria-hidden />
+              <span className="nav-cart-label">Cart</span>
+              {count > 0 && <span className="badge">{count}</span>}
             </Link>
           )}
           {user ? (
             <>
               <Link className="account-link" to="/account">
+                <User size={16} aria-hidden style={{ verticalAlign: "middle", marginRight: 4 }} />
                 {user.username}
                 {role && role !== "customer" ? ` · ${role}` : ""}
               </Link>
               <button type="button" className="button ghost small" onClick={signOut}>
+                <LogOut size={14} aria-hidden />
                 Logout
               </button>
             </>
@@ -69,7 +74,7 @@ export default function Navbar() {
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
-            <span /><span /><span />
+            {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
@@ -79,14 +84,17 @@ export default function Navbar() {
         {user && role === "customer" && (
           <NavLink to="/orders" onClick={close}>Orders</NavLink>
         )}
+        {(role === "customer" || !user) && (
+          <NavLink to="/cart" onClick={close}>
+            Cart{count > 0 ? ` (${count})` : ""}
+          </NavLink>
+        )}
         {isStaff && <NavLink to="/staff" onClick={close}>Staff</NavLink>}
         {isAdmin && <NavLink to="/admin" onClick={close}>Admin</NavLink>}
         {user ? (
           <>
-            <NavLink to="/account" onClick={close}>
-              {user.username}
-            </NavLink>
-            <button type="button" className="button ghost small" onClick={signOut} style={{ marginTop: 8 }}>
+            <NavLink to="/account" onClick={close}>Account</NavLink>
+            <button type="button" className="button ghost" onClick={signOut}>
               Logout
             </button>
           </>

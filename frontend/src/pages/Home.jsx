@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { BadgeCheck, Lock, RefreshCw, ArrowRight, AlertCircle } from "lucide-react";
 import { getProducts } from "../api/productApi";
 import ProductGrid from "../components/ProductGrid";
 import Loading from "../components/Loading";
@@ -46,6 +47,7 @@ export default function Home() {
             </p>
             <Link className="button" to="/products">
               Shop the collection
+              <ArrowRight size={16} aria-hidden />
             </Link>
           </div>
           <div className="hero-card hero-card-logo">
@@ -58,21 +60,27 @@ export default function Home() {
       <div className="container">
         <div className="trust-strip">
           <div className="trust-card">
-            <div className="trust-icon">✓</div>
+            <div className="trust-icon" aria-hidden>
+              <BadgeCheck size={20} />
+            </div>
             <div>
               <h3>Quality curated</h3>
               <p>Hand-picked pieces for everyday confidence.</p>
             </div>
           </div>
           <div className="trust-card">
-            <div className="trust-icon">🔒</div>
+            <div className="trust-icon" aria-hidden>
+              <Lock size={20} />
+            </div>
             <div>
               <h3>Secure checkout</h3>
               <p>Safe payments with order tracking.</p>
             </div>
           </div>
           <div className="trust-card">
-            <div className="trust-icon">↻</div>
+            <div className="trust-icon" aria-hidden>
+              <RefreshCw size={20} />
+            </div>
             <div>
               <h3>Easy returns</h3>
               <p>Hassle-free support when you need it.</p>
@@ -89,6 +97,7 @@ export default function Home() {
           </div>
           <Link className="button ghost" to="/products">
             View all
+            <ArrowRight size={16} aria-hidden />
           </Link>
         </div>
         {loading ? (
@@ -96,7 +105,7 @@ export default function Home() {
         ) : error ? (
           <EmptyState
             variant="error"
-            icon="!"
+            icon={<AlertCircle size={22} />}
             title="Couldn’t load products"
             description={error}
             actionLabel="Retry"
