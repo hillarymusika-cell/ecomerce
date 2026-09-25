@@ -1,0 +1,271 @@
+name: CD – Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  statuses: write
+  deployments: write
+  actions: read
+
+jobs:
+  gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      ref: ${{ steps.resolve.outputs.ref }}
+      allowed: ${{ steps.resolve.outputs.allowed }}
+    steps:
+      - name: Resolve commit & enforce CI success
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            conclusion="${{ github.event.workflow_run.conclusion }}"
+            sha="${{ github.event.workflow_run.head_sha }}"
+            ref="${{ github.event.workflow_run.head_branch }}"
+            echo "workflow_run conclusion=$conclusion sha=$sha ref=$ref"
+            if [ "$conclusion" != "success" ]; then
+              echo "::warning::CI did not succeed (conclusion=$conclusion) — deploy blocked"
+              echo "allowed=false" >> "$GITHUB_OUTPUT"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              echo "ref=$ref" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            sha="${{ github.sha }}"
+            ref="${{ github.ref_name }}"
+            echo "manual dispatch sha=$sha ref=$ref"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    name: Build & push images
+    needs: gate
+    if: needs.gate.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      backend_image: ${{ steps.meta-backend.outputs.tags }}
+      frontend_image: ${{ steps.meta-frontend.outputs.tags }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ecomerce/backend
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=${{ needs.gate.outputs.sha }}
+            type=raw,value=latest,enable=${{ needs.gate.outputs.ref == 'main' }}
+
+      - id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ecomerce/frontend
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=${{ needs.gate.outputs.sha }}
+            type=raw,value=latest,enable=${{ needs.gate.outputs.ref == 'main' }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha,scope=backend-cd
+          cache-to: type=gha,mode=max,scope=backend-cd
+          provenance: false
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL || 'https://ecomerce-xw1v.onrender.com' }}
+          cache-from: type=gha,scope=frontend-cd
+          cache-to: type=gha,mode=max,scope=frontend-cd
+          provenance: false
+
+  deploy-staging:
+    name: Deploy staging
+    needs: [gate, build-and-push]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    if: >-
+      needs.gate.outputs.allowed == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
+       github.event_name == 'workflow_run')
+    steps:
+      - name: Webhook deploy (fail-closed when configured)
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
+          BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
+          FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL:-}" ]; then
+            echo "::warning::No DEPLOY_WEBHOOK_URL — images pushed to GHCR only"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${WEBHOOK_TOKEN:-}" \
+            --max-time 60 \
+            -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"staging\",\"sha\":\"$SHA\"}") || true
+          echo "HTTP $code"; cat /tmp/resp.json 2>/dev/null || true
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Staging webhook failed HTTP $code"
+            exit 1
+          fi
+
+      - name: Post-deploy health
+        if: vars.STAGING_HEALTH_URL != ''
+        env:
+          HEALTH_URL: ${{ vars.STAGING_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 5 "$HEALTH_URL"; then
+              echo; echo "Staging healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Staging health check failed"
+          exit 1
+
+  deploy-production:
+    name: Deploy production
+    needs: [gate, build-and-push]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    if: >-
+      needs.gate.outputs.allowed == 'true' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'production'
+    steps:
+      - name: Webhook deploy (required)
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
+          BACKEND: ${{ needs.build-and-push.outputs.backend_image }}
+          FRONTEND: ${{ needs.build-and-push.outputs.frontend_image }}
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL:-}" ]; then
+            echo "::error::DEPLOY_WEBHOOK_URL required for production"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${WEBHOOK_TOKEN:-}" \
+            --max-time 90 \
+            -d "{\"backend\":\"$BACKEND\",\"frontend\":\"$FRONTEND\",\"environment\":\"production\",\"sha\":\"$SHA\"}") || true
+          echo "HTTP $code"; cat /tmp/resp.json 2>/dev/null || true
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Production webhook failed HTTP $code"
+            exit 1
+          fi
+
+      - name: Post-deploy health
+        if: vars.PRODUCTION_HEALTH_URL != ''
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            if curl -fsS --max-time 5 "$HEALTH_URL"; then
+              echo; echo "Production healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Production health check failed"
+          exit 1
+
+  cd-summary:
+    name: CD summary
+    runs-on: ubuntu-latest
+    needs: [gate, build-and-push, deploy-staging, deploy-production]
+    if: always()
+    steps:
+      - name: Aggregate
+        run: |
+          set -euo pipefail
+          allowed="${{ needs.gate.outputs.allowed }}"
+          echo "allowed=$allowed"
+          echo "gate=${{ needs.gate.result }}"
+          echo "build=${{ needs.build-and-push.result }}"
+          echo "staging=${{ needs.deploy-staging.result }}"
+          echo "production=${{ needs.deploy-production.result }}"
+
+          if [ "$allowed" != "true" ]; then
+            echo "::notice::CD skipped — upstream CI did not succeed"
+            exit 0
+          fi
+
+          for pair in "gate:${{ needs.gate.result }}" "build:${{ needs.build-and-push.result }}"; do
+            r="${pair#*:}"
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::$pair"
+              exit 1
+            fi
+          done
+          for pair in "staging:${{ needs.deploy-staging.result }}" "production:${{ needs.deploy-production.result }}"; do
+            r="${pair#*:}"
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::$pair"
+              exit 1
+            fi
+          done
+          echo "CD OK"
