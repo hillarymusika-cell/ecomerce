@@ -21,15 +21,39 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
-# Comma-separated hosts. Default is local-only; set DJANGO_ALLOWED_HOSTS in prod
-# (e.g. "ecomerce-api.onrender.com,adams-collection.onrender.com").
+
+def _split_csv(name: str, default: str = "") -> list[str]:
+    raw = os.environ.get(name, default) or ""
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _normalize_host(value: str) -> str:
+    """Accept host or URL; return bare hostname (no scheme/path/slash)."""
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if "://" in value:
+        value = urlparse(value).hostname or value
+    return value.strip().rstrip("/")
+
+
+def _normalize_origin(value: str) -> str:
+    """CORS/CSRF origin: scheme://host[:port], never a trailing slash."""
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if "://" not in value:
+        value = f"https://{value}"
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+# Comma-separated hosts. Prod example:
+# DJANGO_ALLOWED_HOSTS=ecomerce-api.onrender.com,adams-collections.onrender.com
 ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.environ.get(
-        "DJANGO_ALLOWED_HOSTS",
-        "localhost,127.0.0.1",
-    ).split(",")
-    if h.strip()
+    h for h in (_normalize_host(x) for x in _split_csv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")) if h
 ]
 if DEBUG and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS = list(set(ALLOWED_HOSTS + ["localhost", "127.0.0.1"]))
@@ -101,6 +125,7 @@ SIMPLE_JWT = {
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -110,25 +135,17 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Comma-separated origins. Default is local Vite; set CORS_ALLOWED_ORIGINS in prod
-# (e.g. "https://adams-collection.onrender.com,https://ecomerce-frontend.onrender.com").
+# Comma-separated absolute origins (no trailing slash).
+# Prod: CORS_ALLOWED_ORIGINS=https://adams-collections.onrender.com
+_cors_default = "http://localhost:5173,http://127.0.0.1:5173"
 CORS_ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.environ.get(
-        "CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
-    if o.strip()
+    o for o in (_normalize_origin(x) for x in _split_csv("CORS_ALLOWED_ORIGINS", _cors_default)) if o
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# Align CSRF trusted origins with CORS when credentials are used (Render / reverse proxies).
-_csrf_extra = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
-CSRF_TRUSTED_ORIGINS = [
-    o.strip()
-    for o in (_csrf_extra or ",".join(CORS_ALLOWED_ORIGINS)).split(",")
-    if o.strip() and o.strip().startswith(("http://", "https://"))
-]
+# CSRF must match frontend origin when credentials / session cookies are used.
+_csrf_raw = _split_csv("CSRF_TRUSTED_ORIGINS") or list(CORS_ALLOWED_ORIGINS)
+CSRF_TRUSTED_ORIGINS = [o for o in (_normalize_origin(x) for x in _csrf_raw) if o]
 
 ROOT_URLCONF = "project.urls"
 
@@ -238,8 +255,17 @@ TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Serve collected static via WhiteNoise in the API container (admin, DRF, etc.)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
