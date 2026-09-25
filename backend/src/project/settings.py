@@ -21,9 +21,14 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
+# Comma-separated hosts. Default is local-only; set DJANGO_ALLOWED_HOSTS in prod
+# (e.g. "ecomerce-api.onrender.com,adams-collection.onrender.com").
 ALLOWED_HOSTS = [
     h.strip()
-    for h in os.environ.get("DJANGO_ALLOWED_HOSTS","https://adams-collection.onrender.com", "localhost,127.0.0.1").split(",")
+    for h in os.environ.get(
+        "DJANGO_ALLOWED_HOSTS",
+        "localhost,127.0.0.1",
+    ).split(",")
     if h.strip()
 ]
 if DEBUG and "*" not in ALLOWED_HOSTS:
@@ -105,16 +110,25 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# Comma-separated origins. Default is local Vite; set CORS_ALLOWED_ORIGINS in prod
+# (e.g. "https://adams-collection.onrender.com,https://ecomerce-frontend.onrender.com").
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "https://adams-collection.onrender.com",
         "http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if o.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Align CSRF trusted origins with CORS when credentials are used (Render / reverse proxies).
+_csrf_extra = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in (_csrf_extra or ",".join(CORS_ALLOWED_ORIGINS)).split(",")
+    if o.strip() and o.strip().startswith(("http://", "https://"))
+]
 
 ROOT_URLCONF = "project.urls"
 
