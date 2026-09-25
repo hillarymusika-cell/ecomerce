@@ -54,7 +54,8 @@ services:
     plan: free
     branch: main
     rootDir: frontend
-    buildCommand: npm ci && npm run build
+    # No package-lock.json in repo — npm install (not ci) until a lockfile is committed
+    buildCommand: npm install --no-audit --no-fund && npm run build
     staticPublishPath: dist
     autoDeploy: true
 
