@@ -93,9 +93,12 @@ COPY --chown=app:app backend/src/project /app/project
 COPY --chown=app:app backend/src/app /app/app
 COPY --chown=app:app docker/entrypoint.sh /entrypoint.sh
 
+# collectstatic needs a minimal settings bootstrap; do not rely on prod secrets here.
 RUN chmod 755 /entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-only \
        DJANGO_DEBUG=False \
+       DJANGO_ALLOWED_HOSTS=localhost \
+       SECURE_SSL_REDIRECT=False \
        python manage.py collectstatic --noinput \
     && chown -R app:app /app/staticfiles
 
