@@ -23,7 +23,7 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
 ALLOWED_HOSTS = [
     h.strip()
-    for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    for h in os.environ.get("DJANGO_ALLOWED_HOSTS","https://adams-collection.onrender.com", "localhost,127.0.0.1").split(",")
     if h.strip()
 ]
 if DEBUG and "*" not in ALLOWED_HOSTS:
@@ -109,6 +109,7 @@ CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
+        "https://adams-collection.onrender.com",
         "http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if o.strip()
