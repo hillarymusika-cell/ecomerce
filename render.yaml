@@ -17,7 +17,7 @@ services:
         value: "False"
 
       - key: DJANGO_ALLOWED_HOSTS
-        value: "ecomerce-api.onrender.com,adams-collections.onrender.com"
+        value: "ecomerce-xw1v.onrender.com,ecomerce-api.onrender.com,adams-collections.onrender.com"
 
       - key: DATABASE_URL
         fromDatabase:
@@ -61,7 +61,7 @@ services:
 
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: "https://ecomerce-xw1v.onrender.com"
 
 databases:
   - name: ecomerce-db

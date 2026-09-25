@@ -10,7 +10,7 @@
 #
 # Build:
 #   docker build -f Dockerfile.frontend -t ecomerce-frontend \
-#     --build-arg VITE_API_URL=https://api.example.com .
+#     --build-arg VITE_API_URL=https://ecomerce-xw1v.onrender.com .
 # =============================================================================
 
 ARG NODE_VERSION=20
@@ -46,7 +46,7 @@ COPY frontend/index.html ./
 COPY frontend/vite.config.js ./
 COPY frontend/src ./src
 
-ARG VITE_API_URL=http://localhost:8000
+ARG VITE_API_URL=https://ecomerce-xw1v.onrender.com
 ENV VITE_API_URL=$VITE_API_URL \
     NODE_ENV=production
 
