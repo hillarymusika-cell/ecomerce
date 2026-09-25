@@ -17,20 +17,18 @@ services:
         value: "False"
 
       - key: DJANGO_ALLOWED_HOSTS
-        value: "ecomerce-api.onrender.com,adams-collection.onrender.com"
+        value: "ecomerce-api.onrender.com,adams-collections.onrender.com"
 
       - key: DATABASE_URL
         fromDatabase:
           name: ecomerce-db
           property: connectionString
 
-      # Set in Render dashboard, e.g.
-      # https://adams-collection.onrender.com,https://ecomerce-frontend.onrender.com
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: "https://adams-collections.onrender.com"
 
       - key: CSRF_TRUSTED_ORIGINS
-        sync: false
+        value: "https://adams-collections.onrender.com"
 
       - key: FLW_SECRET_HASH
         sync: false
