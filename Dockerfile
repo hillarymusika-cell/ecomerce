@@ -94,6 +94,7 @@ COPY --chown=app:app backend/src/app /app/app
 COPY --chown=app:app docker/entrypoint.sh /entrypoint.sh
 
 # collectstatic needs a minimal settings bootstrap; do not rely on prod secrets here.
+# force rebuild: settings TypeError fixed on main (c87a307+)
 RUN chmod 755 /entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-only \
        DJANGO_DEBUG=False \
