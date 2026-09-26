@@ -1,9 +1,9 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, deriveRole, homeForRole } from "../context/AuthContext";
 import Loading from "./Loading";
 
 export default function ProtectedRoute({ children, roles }) {
-  const { isAuthenticated, loading, user, isStaff, isAdmin } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) return <Loading />;
@@ -12,13 +12,9 @@ export default function ProtectedRoute({ children, roles }) {
   }
 
   if (roles?.length) {
-    const role =
-      user?.role_label ||
-      (isAdmin ? "admin" : isStaff ? "staff" : "customer");
+    const role = deriveRole(user);
     if (!roles.includes(role)) {
-      if (role === "admin") return <Navigate to="/admin" replace />;
-      if (role === "staff") return <Navigate to="/staff" replace />;
-      return <Navigate to="/" replace />;
+      return <Navigate to={homeForRole(role)} replace />;
     }
   }
 
