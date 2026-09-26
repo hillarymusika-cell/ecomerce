@@ -131,10 +131,11 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
+# CorsMiddleware must be as high as possible (before CommonMiddleware).
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -143,17 +144,56 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Comma-separated absolute origins (no trailing slash).
+# ---------------------------------------------------------------------------
+# CORS / CSRF – frontend origins (absolute, no trailing slash)
+# ---------------------------------------------------------------------------
 # Prod: CORS_ALLOWED_ORIGINS=https://adams-collections.onrender.com
-_cors_default = "http://localhost:5173,http://127.0.0.1:5173"
+_cors_default = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "https://adams-collections.onrender.com"
+)
 CORS_ALLOWED_ORIGINS = [
-    o for o in (_normalize_origin(x) for x in _split_csv("CORS_ALLOWED_ORIGINS", _cors_default)) if o
+    o
+    for o in (
+        _normalize_origin(x)
+        for x in _split_csv("CORS_ALLOWED_ORIGINS", ",".join(_cors_default))
+    )
+    if o
 ]
+
+# Always allow the known production frontend if env is incomplete
+_prod_frontend = "https://adams-collections.onrender.com"
+if _prod_frontend not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_prod_frontend)
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+CORS_EXPOSE_HEADERS = ["content-type", "x-request-id"]
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 # CSRF must match frontend origin when credentials / session cookies are used.
 _csrf_raw = _split_csv("CSRF_TRUSTED_ORIGINS") or list(CORS_ALLOWED_ORIGINS)
 CSRF_TRUSTED_ORIGINS = [o for o in (_normalize_origin(x) for x in _csrf_raw) if o]
+if _prod_frontend not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(_prod_frontend)
 
 ROOT_URLCONF = "project.urls"
 
@@ -291,6 +331,9 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # SameSite=None required if ever using cross-site cookies with credentials
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "False").lower() in (
         "1",
         "true",
