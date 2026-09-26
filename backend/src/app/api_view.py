@@ -5,41 +5,45 @@ Hardened with select_related/prefetch, atomic stock checks, and clear errors.
 from decimal import Decimal
 import logging
 import uuid
-from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count, F, Q, Sum, Avg
-from django.db.models.functions import TruncDate, Coalesce
-from django.utils import timezone
+from django.db.models import Q
 from rest_framework import status, viewsets, filters
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from .models import (
     Product,
+    ProductImage,
     Cart,
     CartItem,
     Order,
     OrderItem,
     Category,
-    User,
-    Transaction,
 )
 from .serializers import (
     ProductSerializer,
     ProductWriteSerializer,
+    ProductImageSerializer,
     CartSerializer,
     CartItemSerializer,
     OrderSerializer,
     CategorySerializer,
-    UserAdminSerializer,
 )
-from .permissions import IsStaffUser, IsAdminUser, IsStaffOrReadOnly
-from . import cache_utils
+from .permissions import IsStaffUser, IsStaffOrReadOnly
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +63,9 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Category.objects.select_related("parent")
         if not self.request.user.is_authenticated or not (
-            self.request.user.is_staff or self.request.user.is_admin or self.request.user.is_superuser
+            self.request.user.is_staff
+            or self.request.user.is_admin
+            or self.request.user.is_superuser
         ):
             qs = qs.filter(is_active=True)
         return qs
@@ -73,6 +79,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "sku", "description", "short_description"]
     ordering_fields = ["name", "price", "created_at", "stock_quantity"]
     ordering = ["name"]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
         qs = Product.objects.select_related("category").prefetch_related("images")
@@ -107,6 +114,122 @@ class ProductViewSet(viewsets.ModelViewSet):
             return ProductWriteSerializer
         return ProductSerializer
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+    def _is_staff(self, user):
+        return bool(
+            user
+            and user.is_authenticated
+            and (user.is_staff or user.is_admin or user.is_superuser)
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="images",
+        permission_classes=[IsStaffUser],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_images(self, request, slug=None):
+        """Upload one or more images. Field name: image or images."""
+        product = self.get_object()
+        files = request.FILES.getlist("images") or request.FILES.getlist("image")
+        if not files and request.FILES.get("image"):
+            files = [request.FILES["image"]]
+        if not files:
+            return Response(
+                {"detail": "No image file provided. Use field 'image' or 'images'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        alt_text = (request.data.get("alt_text") or "")[:255]
+        make_primary = str(request.data.get("is_primary", "")).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        created = []
+
+        for f in files:
+            content_type = getattr(f, "content_type", "") or ""
+            if content_type and content_type not in ALLOWED_IMAGE_TYPES:
+                return Response(
+                    {
+                        "detail": f"Unsupported type '{content_type}'. Use JPEG, PNG, WebP, or GIF."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if f.size and f.size > MAX_IMAGE_BYTES:
+                return Response(
+                    {"detail": "Image too large (max 5 MB)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            is_primary = make_primary and not created
+            if not product.images.exists() and not created:
+                is_primary = True
+
+            img = ProductImage(
+                product=product,
+                alt_text=alt_text or product.name[:255],
+                is_primary=is_primary,
+                sort_order=product.images.count() + len(created),
+            )
+            img.image = f
+            img.save()
+            created.append(img)
+
+        ser = ProductImageSerializer(
+            created, many=True, context={"request": request}
+        )
+        return Response(ser.data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"images/(?P<image_id>[0-9]+)",
+        permission_classes=[IsStaffUser],
+    )
+    def delete_image(self, request, slug=None, image_id=None):
+        product = self.get_object()
+        try:
+            img = product.images.get(pk=image_id)
+        except ProductImage.DoesNotExist:
+            return Response(
+                {"detail": "Image not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        was_primary = img.is_primary
+        img.image.delete(save=False)
+        img.delete()
+        if was_primary:
+            nxt = product.images.order_by("sort_order", "id").first()
+            if nxt:
+                nxt.is_primary = True
+                nxt.save(update_fields=["is_primary"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"images/(?P<image_id>[0-9]+)/primary",
+        permission_classes=[IsStaffUser],
+    )
+    def set_primary_image(self, request, slug=None, image_id=None):
+        product = self.get_object()
+        try:
+            img = product.images.get(pk=image_id)
+        except ProductImage.DoesNotExist:
+            return Response(
+                {"detail": "Image not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        img.is_primary = True
+        img.save()
+        ser = ProductImageSerializer(img, context={"request": request})
+        return Response(ser.data)
+
 
 # ---------------------------------------------------------------------------
 # Cart
@@ -126,7 +249,7 @@ class CartViewSet(viewsets.ViewSet):
             .prefetch_related("items__product__images", "items__product__category")
             .first()
         )
-        return Response(CartSerializer(cart).data)
+        return Response(CartSerializer(cart, context={"request": request}).data)
 
     @action(detail=False, methods=["post"])
     def add(self, request):
@@ -134,24 +257,40 @@ class CartViewSet(viewsets.ViewSet):
         try:
             quantity = int(request.data.get("quantity", 1))
         except (TypeError, ValueError):
-            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST
+            )
         if quantity < 1:
-            return Response({"detail": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Quantity must be at least 1."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            product = Product.objects.select_for_update(of=("self",)).get(
+            product = Product.objects.get(
                 id=product_id, status=Product.Status.ACTIVE
             )
         except Product.DoesNotExist:
-            return Response({"detail": "Product not found or unavailable."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Product not found or unavailable."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         with transaction.atomic():
             product = Product.objects.select_for_update().get(pk=product.pk)
             if product.status != Product.Status.ACTIVE:
-                return Response({"detail": "Product not available."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Product not available."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if product.track_inventory and product.stock_quantity < quantity:
-                return Response({"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Insufficient stock."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             cart = self._get_cart(request.user)
             item, created = CartItem.objects.select_for_update().get_or_create(
-                cart=cart, product=product, defaults={"quantity": quantity},
+                cart=cart,
+                product=product,
+                defaults={"quantity": quantity},
             )
             if not created:
                 new_qty = item.quantity + quantity
@@ -164,7 +303,7 @@ class CartViewSet(viewsets.ViewSet):
                 item.save(update_fields=["quantity", "updated_at"])
         item = CartItem.objects.select_related("product").get(pk=item.pk)
         return Response(
-            CartItemSerializer(item).data,
+            CartItemSerializer(item, context={"request": request}).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
@@ -175,29 +314,43 @@ class CartViewSet(viewsets.ViewSet):
                 id=item_id, cart__user=request.user
             )
         except CartItem.DoesNotExist:
-            return Response({"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND
+            )
         quantity = request.data.get("quantity")
         if quantity is None:
-            return Response({"detail": "Quantity is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Quantity is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
         try:
             quantity = int(quantity)
         except (TypeError, ValueError):
-            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST
+            )
         if quantity <= 0:
             item.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         product = item.product
         if product.track_inventory and product.stock_quantity < quantity:
-            return Response({"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST
+            )
         item.quantity = quantity
         item.save(update_fields=["quantity", "updated_at"])
-        return Response(CartItemSerializer(item).data)
+        return Response(
+            CartItemSerializer(item, context={"request": request}).data
+        )
 
     @action(detail=False, methods=["delete"], url_path=r"items/(?P<item_id>[^/.]+)")
     def remove_item(self, request, item_id=None):
-        deleted, _ = CartItem.objects.filter(id=item_id, cart__user=request.user).delete()
+        deleted, _ = CartItem.objects.filter(
+            id=item_id, cart__user=request.user
+        ).delete()
         if not deleted:
-            return Response({"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["delete"])
@@ -229,19 +382,28 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             .first()
         )
         if not cart or not cart.items.exists():
-            return Response({"detail": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST
+            )
         shipping_address = request.data.get("shipping_address") or {}
         billing_address = request.data.get("billing_address") or shipping_address
         notes = (request.data.get("notes") or "")[:2000]
         try:
             with transaction.atomic():
-                items = list(cart.items.select_related("product").select_for_update())
+                items = list(
+                    cart.items.select_related("product").select_for_update()
+                )
                 if not items:
-                    return Response({"detail": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"detail": "Your cart is empty."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 product_ids = [i.product_id for i in items]
                 products = {
                     p.id: p
-                    for p in Product.objects.select_for_update().filter(id__in=product_ids)
+                    for p in Product.objects.select_for_update().filter(
+                        id__in=product_ids
+                    )
                 }
                 subtotal = Decimal("0.00")
                 order_items = []
@@ -249,10 +411,15 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                     product = products.get(item.product_id)
                     if not product or product.status != Product.Status.ACTIVE:
                         return Response(
-                            {"detail": f"Product '{item.product.name}' is no longer available."},
+                            {
+                                "detail": f"Product '{item.product.name}' is no longer available."
+                            },
                             status=status.HTTP_400_BAD_REQUEST,
                         )
-                    if product.track_inventory and product.stock_quantity < item.quantity:
+                    if (
+                        product.track_inventory
+                        and product.stock_quantity < item.quantity
+                    ):
                         return Response(
                             {
                                 "detail": f"Insufficient stock for {product.name}. Available: {product.stock_quantity}."
@@ -289,7 +456,10 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                     products[item.product_id].reduce_stock(item.quantity)
                 cart.items.all().delete()
             order = Order.objects.prefetch_related("items__product").get(pk=order.pk)
-            return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+            return Response(
+                OrderSerializer(order, context={"request": request}).data,
+                status=status.HTTP_201_CREATED,
+            )
         except Exception:
             logger.exception("Checkout failed for user %s", request.user.id)
             return Response(
