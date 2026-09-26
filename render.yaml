@@ -24,11 +24,15 @@ services:
           name: ecomerce-db
           property: connectionString
 
+      # Absolute origins, no trailing slash – required for browser CORS
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://adams-collections.onrender.com"
+        value: "https://adams-collections.onrender.com,http://localhost:5173,http://127.0.0.1:5173"
 
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://adams-collections.onrender.com"
+        value: "https://adams-collections.onrender.com,http://localhost:5173,http://127.0.0.1:5173"
+
+      - key: SECURE_SSL_REDIRECT
+        value: "False"
 
       - key: FLW_SECRET_HASH
         sync: false
