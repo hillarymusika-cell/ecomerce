@@ -15,9 +15,24 @@ from .models import (
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductImage
-        fields = ["id", "image", "alt_text", "is_primary", "sort_order"]
+        fields = ["id", "image", "url", "alt_text", "is_primary", "sort_order"]
+        read_only_fields = ["id", "url"]
+
+    def get_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        try:
+            url = obj.image.url
+        except ValueError:
+            return None
+        if request is not None:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -29,32 +44,73 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
-    primary_image_url = serializers.CharField(read_only=True)
+    primary_image_url = serializers.SerializerMethodField()
     is_available = serializers.BooleanField(read_only=True)
     is_in_stock = serializers.BooleanField(read_only=True)
-    category_name = serializers.CharField(source="category.name", read_only=True, default=None)
+    category_name = serializers.CharField(
+        source="category.name", read_only=True, default=None
+    )
 
     class Meta:
         model = Product
         fields = [
-            "id", "name", "slug", "sku", "description", "short_description",
-            "price", "compare_at_price", "cost_price", "currency",
-            "track_inventory", "stock_quantity", "low_stock_threshold",
-            "status", "is_featured", "is_digital", "is_available", "is_in_stock",
-            "primary_image_url", "images", "category", "category_name",
-            "created_at", "updated_at",
+            "id",
+            "name",
+            "slug",
+            "sku",
+            "description",
+            "short_description",
+            "price",
+            "compare_at_price",
+            "cost_price",
+            "currency",
+            "track_inventory",
+            "stock_quantity",
+            "low_stock_threshold",
+            "status",
+            "is_featured",
+            "is_digital",
+            "is_available",
+            "is_in_stock",
+            "primary_image_url",
+            "images",
+            "category",
+            "category_name",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = ["id", "slug", "created_at", "updated_at"]
+
+    def get_primary_image_url(self, obj):
+        url = obj.primary_image_url
+        if not url:
+            return None
+        request = self.context.get("request")
+        if request is not None and url.startswith("/"):
+            return request.build_absolute_uri(url)
+        return url
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id", "name", "sku", "description", "short_description",
-            "price", "compare_at_price", "cost_price", "currency",
-            "track_inventory", "stock_quantity", "low_stock_threshold",
-            "status", "is_featured", "is_digital", "category",
+            "id",
+            "name",
+            "sku",
+            "description",
+            "short_description",
+            "price",
+            "compare_at_price",
+            "cost_price",
+            "currency",
+            "track_inventory",
+            "stock_quantity",
+            "low_stock_threshold",
+            "status",
+            "is_featured",
+            "is_digital",
+            "category",
         ]
         read_only_fields = ["id"]
 
@@ -103,8 +159,22 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ["id", "product", "product_name", "sku", "quantity", "unit_price", "total_price"]
-        read_only_fields = ["id", "product_name", "sku", "unit_price", "total_price"]
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "sku",
+            "quantity",
+            "unit_price",
+            "total_price",
+        ]
+        read_only_fields = [
+            "id",
+            "product_name",
+            "sku",
+            "unit_price",
+            "total_price",
+        ]
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -114,14 +184,34 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "order_number", "user", "user_email", "status",
-            "subtotal", "shipping_cost", "tax_amount", "discount", "total",
-            "currency", "shipping_address", "billing_address", "notes",
-            "items", "created_at", "updated_at", "paid_at",
+            "id",
+            "order_number",
+            "user",
+            "user_email",
+            "status",
+            "subtotal",
+            "shipping_cost",
+            "tax_amount",
+            "discount",
+            "total",
+            "currency",
+            "shipping_address",
+            "billing_address",
+            "notes",
+            "items",
+            "created_at",
+            "updated_at",
+            "paid_at",
         ]
         read_only_fields = [
-            "id", "order_number", "user", "subtotal", "total",
-            "created_at", "updated_at", "paid_at",
+            "id",
+            "order_number",
+            "user",
+            "subtotal",
+            "total",
+            "created_at",
+            "updated_at",
+            "paid_at",
         ]
 
 
@@ -131,11 +221,28 @@ class UserAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "id", "email", "username", "telephone_no", "country", "city",
-            "role", "role_label", "is_staff", "is_admin", "is_superuser",
-            "is_active", "created_at",
+            "id",
+            "email",
+            "username",
+            "telephone_no",
+            "country",
+            "city",
+            "role",
+            "role_label",
+            "is_staff",
+            "is_admin",
+            "is_superuser",
+            "is_active",
+            "created_at",
         ]
-        read_only_fields = ["id", "email", "username", "telephone_no", "created_at", "role_label"]
+        read_only_fields = [
+            "id",
+            "email",
+            "username",
+            "telephone_no",
+            "created_at",
+            "role_label",
+        ]
 
     def get_role_label(self, obj):
         if obj.is_superuser or obj.is_admin:
