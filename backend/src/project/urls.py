@@ -29,7 +29,11 @@ from app.api_admin import (
     AdminOrderViewSet,
     HealthCheckView,
 )
-from app.transaction import payment_webhook, initiate_payment
+from app.transaction import (
+    payment_webhook,
+    InitiatePaymentView,
+    ConfirmPaymentView,
+)
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
@@ -67,9 +71,16 @@ urlpatterns = [
     path("api/staff/dashboard/", StaffDashboardView.as_view(), name="staff-dashboard"),
     path("api/admin/", include(admin_router.urls)),
     path("api/payments/webhook/", payment_webhook, name="payment-webhook"),
-    path("api/orders/<int:order_id>/pay/", initiate_payment, name="initiate-payment"),
-    # Serve uploaded media (product images) even when DEBUG=False (e.g. Render).
-    # Note: free-tier disk is ephemeral — use S3/Cloudinary for durable storage later.
+    path(
+        "api/orders/<int:order_id>/pay/",
+        InitiatePaymentView.as_view(),
+        name="initiate-payment",
+    ),
+    path(
+        "api/orders/<int:order_id>/pay/confirm/",
+        ConfirmPaymentView.as_view(),
+        name="confirm-payment",
+    ),
     re_path(
         r"^media/(?P<path>.*)$",
         serve,
