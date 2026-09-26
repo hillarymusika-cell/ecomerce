@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAdminOrders, updateOrderStatus } from "../../api/adminApi";
 import Loading from "../../components/Loading";
+import { getErrorMessage } from "../../utils/errors";
 
-const STATUSES = ["pending", "paid", "processing", "shipped", "delivered", "cancelled", "refunded"];
+const STATUSES = [
+  "pending",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+];
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -12,9 +21,10 @@ export default function AdminOrders() {
 
   const load = () => {
     setLoading(true);
+    setError("");
     getAdminOrders()
-      .then(({ data }) => setOrders(data.results || data))
-      .catch(() => setError("Failed to load orders."))
+      .then(({ data }) => setOrders(data.results || data || []))
+      .catch((err) => setError(getErrorMessage(err, "Failed to load orders.")))
       .finally(() => setLoading(false));
   };
 
@@ -25,7 +35,7 @@ export default function AdminOrders() {
       await updateOrderStatus(id, status);
       load();
     } catch (err) {
-      alert(err.response?.data?.detail || "Update failed.");
+      alert(getErrorMessage(err, "Update failed."));
     }
   };
 
@@ -36,7 +46,9 @@ export default function AdminOrders() {
           <span className="eyebrow">SYSTEM ADMIN</span>
           <h1>All orders</h1>
         </div>
-        <Link className="button ghost small" to="/admin">Dashboard</Link>
+        <Link className="button ghost small" to="/admin">
+          Dashboard
+        </Link>
       </div>
       {error && <div className="alert">{error}</div>}
       {loading ? (
@@ -57,20 +69,34 @@ export default function AdminOrders() {
               {orders.map((o) => (
                 <tr key={o.id}>
                   <td>{o.order_number}</td>
-                  <td>{o.user_email}</td>
-                  <td>{o.currency} {o.total}</td>
+                  <td>{o.user_email || "—"}</td>
                   <td>
-                    <select value={o.status} onChange={(e) => changeStatus(o.id, e.target.value)}>
+                    {o.currency} {o.total}
+                  </td>
+                  <td>
+                    <select
+                      value={o.status}
+                      onChange={(e) => changeStatus(o.id, e.target.value)}
+                      aria-label={`Status for ${o.order_number}`}
+                    >
                       {STATUSES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
                       ))}
                     </select>
                   </td>
-                  <td>{new Date(o.created_at).toLocaleString()}</td>
+                  <td>
+                    {o.created_at
+                      ? new Date(o.created_at).toLocaleString()
+                      : "—"}
+                  </td>
                 </tr>
               ))}
               {!orders.length && (
-                <tr><td colSpan={5}>No orders yet.</td></tr>
+                <tr>
+                  <td colSpan={5}>No orders yet.</td>
+                </tr>
               )}
             </tbody>
           </table>
