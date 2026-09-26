@@ -1,7 +1,7 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve
 from rest_framework.routers import DefaultRouter
 
 from app.auth import (
@@ -68,7 +68,11 @@ urlpatterns = [
     path("api/admin/", include(admin_router.urls)),
     path("api/payments/webhook/", payment_webhook, name="payment-webhook"),
     path("api/orders/<int:order_id>/pay/", initiate_payment, name="initiate-payment"),
+    # Serve uploaded media (product images) even when DEBUG=False (e.g. Render).
+    # Note: free-tier disk is ephemeral — use S3/Cloudinary for durable storage later.
+    re_path(
+        r"^media/(?P<path>.*)$",
+        serve,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
