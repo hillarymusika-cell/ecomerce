@@ -66,7 +66,6 @@ export default function Login() {
       if (remember) setRememberedEmail(email);
       else setRememberedEmail("");
 
-      const role = data.role || homeForRole && null;
       const resolvedRole =
         data.role ||
         (data.user?.is_superuser || data.user?.is_admin
@@ -84,8 +83,7 @@ export default function Login() {
         if (adminOnly && resolvedRole === "admin") dest = from;
         else if (staffOnly && (resolvedRole === "staff" || resolvedRole === "admin"))
           dest = from;
-        else if (!adminOnly && !staffOnly && resolvedRole === "customer") dest = from;
-        else if (!adminOnly && !staffOnly) dest = from; // account, orders, etc.
+        else if (!adminOnly && !staffOnly) dest = from;
       }
 
       navigate(dest, { replace: true });
