@@ -16,12 +16,21 @@ import {
 
 const AuthContext = createContext(null);
 
-function deriveRole(user) {
+/** Prefer flags over stored role string so admin/staff always resolve correctly. */
+export function deriveRole(user) {
   if (!user) return null;
-  if (user.role_label) return user.role_label;
   if (user.is_superuser || user.is_admin) return "admin";
   if (user.is_staff) return "staff";
+  const label = (user.role_label || user.role || "").toString().trim().toLowerCase();
+  if (label === "admin" || label === "staff" || label === "customer") return label;
   return "customer";
+}
+
+/** Default home path after login for each role. */
+export function homeForRole(role) {
+  if (role === "admin") return "/admin";
+  if (role === "staff") return "/staff";
+  return "/";
 }
 
 export function AuthProvider({ children }) {
@@ -46,11 +55,13 @@ export function AuthProvider({ children }) {
     const remember = options.remember !== false;
     const { data } = await loginApi(credentials, type);
     saveSession(data, remember);
-    if (!data.user) {
+    let currentUser = data.user;
+    if (!currentUser) {
       const me = await getMe();
-      setUser(me.data);
+      currentUser = me.data;
+      setUser(currentUser);
     }
-    return data;
+    return { ...data, user: currentUser, role: deriveRole(currentUser) };
   };
 
   const register = async (payload, options = {}) => {
