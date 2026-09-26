@@ -6,11 +6,21 @@ import {
   clearTokens,
 } from "../utils/session";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// Strip trailing slash so paths like /auth/login/ never become //auth/login/
+const BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(
+  /\/+$/,
+  ""
+);
 
 const api = axios.create({
   baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
+  // JWT is sent via Authorization header – no cookies needed for API calls
+  withCredentials: false,
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
@@ -47,8 +57,6 @@ api.interceptors.response.use(
             const access = res.data.access;
             updateAccessToken(access);
             if (res.data.refresh) {
-              // Keep refresh in same store as access
-              updateAccessToken(access);
               const remember =
                 localStorage.getItem("auth_remember") !== "0";
               if (remember) {
@@ -75,3 +83,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+export { BASE_URL };
