@@ -99,7 +99,7 @@ REST_FRAMEWORK = {
         "user": os.environ.get("THROTTLE_USER", "120/minute"),
         "auth": os.environ.get("THROTTLE_AUTH", "10/minute"),
     },
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "project.pagination.FlexiblePagination",
     "PAGE_SIZE": int(os.environ.get("PAGE_SIZE", "20")),
     "DEFAULT_FILTER_BACKENDS": [
         "rest_framework.filters.SearchFilter",
@@ -147,7 +147,6 @@ MIDDLEWARE = [
 # ---------------------------------------------------------------------------
 # CORS / CSRF – frontend origins (absolute, no trailing slash)
 # ---------------------------------------------------------------------------
-# Prod: CORS_ALLOWED_ORIGINS=https://adams-collections.onrender.com
 _cors_default = (
     "http://localhost:5173,http://127.0.0.1:5173,"
     "https://adams-collections.onrender.com"
@@ -161,7 +160,6 @@ CORS_ALLOWED_ORIGINS = [
     if o
 ]
 
-# Always allow the known production frontend if env is incomplete
 _prod_frontend = "https://adams-collections.onrender.com"
 if _prod_frontend not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(_prod_frontend)
@@ -189,7 +187,6 @@ CORS_ALLOW_HEADERS = [
 CORS_EXPOSE_HEADERS = ["content-type", "x-request-id"]
 CORS_PREFLIGHT_MAX_AGE = 86400
 
-# CSRF must match frontend origin when credentials / session cookies are used.
 _csrf_raw = _split_csv("CSRF_TRUSTED_ORIGINS") or list(CORS_ALLOWED_ORIGINS)
 CSRF_TRUSTED_ORIGINS = [o for o in (_normalize_origin(x) for x in _csrf_raw) if o]
 if _prod_frontend not in CSRF_TRUSTED_ORIGINS:
@@ -215,9 +212,6 @@ TEMPLATES = [
 WSGI_APPLICATION = "project.wsgi.application"
 ASGI_APPLICATION = "project.asgi.application"
 
-# ---------------------------------------------------------------------------
-# Database – SQLite by default; set DATABASE_URL for Postgres
-# ---------------------------------------------------------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 if DATABASE_URL:
@@ -242,15 +236,10 @@ else:
         }
     }
 
-# ---------------------------------------------------------------------------
-# Cache – Redis when REDIS_URL is set; LocMem otherwise (single-process dev)
-# DRF throttles and catalog cache-aside share this backend.
-# ---------------------------------------------------------------------------
 REDIS_URL = os.environ.get("REDIS_URL", "").strip()
 CACHE_KEY_PREFIX = os.environ.get("CACHE_KEY_PREFIX", "ecomerce")
 CACHE_DEFAULT_TTL = int(os.environ.get("CACHE_DEFAULT_TTL", "300"))
 
-# TTLs used by app.cache helpers (seconds)
 CACHE_TTL = {
     "product": int(os.environ.get("CACHE_PRODUCT_TTL", "300")),
     "product_list": int(os.environ.get("CACHE_PRODUCT_LIST_TTL", "120")),
@@ -265,7 +254,6 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                # Fail open: if Redis is down, fall through to DB instead of 500s
                 "IGNORE_EXCEPTIONS": True,
                 "SOCKET_CONNECT_TIMEOUT": 2,
                 "SOCKET_TIMEOUT": 2,
@@ -305,7 +293,6 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# Serve collected static via WhiteNoise in the API container (admin, DRF, etc.)
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -325,13 +312,11 @@ EMAIL_BACKEND = os.environ.get(
     "django.core.mail.backends.console.EmailBackend",
 )
 
-# Production security
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    # SameSite=None required if ever using cross-site cookies with credentials
     SESSION_COOKIE_SAMESITE = "Lax"
     CSRF_COOKIE_SAMESITE = "Lax"
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "False").lower() in (
@@ -347,9 +332,6 @@ if not DEBUG:
 
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH", "")
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
 
 LOGGING = {
