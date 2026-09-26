@@ -364,9 +364,11 @@ class CartViewSet(viewsets.ViewSet):
 # Orders
 # ---------------------------------------------------------------------------
 
-class OrderViewSet(viewsets.ReadOnlyModelViewSet):
+class OrderViewSet(viewsets.ModelViewSet):
+    """Customer orders: list/retrieve + create from cart."""
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         return (
