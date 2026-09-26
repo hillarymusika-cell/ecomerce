@@ -38,7 +38,20 @@ class AuthService:
         )
 
     @staticmethod
+    def resolve_role(user):
+        """Canonical role for frontend: admin > staff > customer."""
+        if getattr(user, "is_superuser", False) or getattr(user, "is_admin", False):
+            return "admin"
+        if getattr(user, "is_staff", False):
+            return "staff"
+        stored = (getattr(user, "role", None) or "").strip().lower()
+        if stored in ("admin", "staff", "customer"):
+            return stored
+        return "customer"
+
+    @staticmethod
     def user_payload(user):
+        role_label = AuthService.resolve_role(user)
         return {
             "id": user.id,
             "email": user.email,
@@ -46,7 +59,8 @@ class AuthService:
             "telephone_no": getattr(user, "telephone_no", None),
             "country": getattr(user, "country", "") or "",
             "city": getattr(user, "city", "") or "",
-            "role": user.role or "",
+            "role": user.role or role_label,
+            "role_label": role_label,
             "is_staff": user.is_staff,
             "is_admin": user.is_admin,
             "is_superuser": user.is_superuser,
@@ -114,6 +128,7 @@ class RegisterView(BaseAuthView):
                     latitude=geo.get("latitude"),
                     longitude=geo.get("longitude"),
                     default_ip=geo.get("default_ip"),
+                    role="customer",
                 )
                 AuthService.log_action(
                     user, CustomerLog.Action.REGISTER, request, "New registration"
