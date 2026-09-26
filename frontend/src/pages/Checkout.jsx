@@ -30,7 +30,7 @@ export default function Checkout() {
     country: "",
     notes: "",
   });
-  const [method, setMethod] = useState("card"); // card | cod
+  const [method, setMethod] = useState("card");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -42,7 +42,6 @@ export default function Checkout() {
     });
 
     if (pay.demo_mode || !pay.public_key) {
-      // Demo / no Flutterwave keys: confirm immediately as test card payment
       await confirmPayment(order.id, {
         reference: pay.reference,
         demo: true,
@@ -78,10 +77,7 @@ export default function Checkout() {
             reject(err);
           }
         },
-        onclose: () => {
-          // User closed modal – order stays pending; they can pay from order page
-          resolve(null);
-        },
+        onclose: () => resolve(null),
       });
     });
   };
@@ -114,7 +110,6 @@ export default function Checkout() {
         payment_method: method,
       });
 
-      // Cart is cleared server-side on order create; refresh client state
       try {
         await clear();
       } catch {
@@ -125,7 +120,6 @@ export default function Checkout() {
         try {
           await payWithCard(order);
         } catch (payErr) {
-          // Order exists – send user to pay later
           setError(
             getErrorMessage(
               payErr,
@@ -198,7 +192,8 @@ export default function Checkout() {
           <label>
             Country
             <input
-              name="country"raude required
+              name="country"
+              required
               autoComplete="country-name"
               value={form.country}
               onChange={change}
