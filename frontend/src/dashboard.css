@@ -265,6 +265,57 @@
 .status.archived { background: #f1f5f9; color: #64748b; }
 .status.out_of_stock { background: var(--danger-soft); color: var(--danger); }
 
+/* ——— Product image gallery (staff form) ——— */
+.image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.image-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+.image-tile.primary {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 25%, transparent);
+}
+.image-tile img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.image-placeholder {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.image-tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.image-tile-actions .badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--accent-soft);
+  color: #065f46;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
 @media (max-width: 1000px) {
   .stats-grid,
   .stats-grid.mini { grid-template-columns: repeat(2, 1fr); }
