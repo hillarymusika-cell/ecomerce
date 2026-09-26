@@ -55,6 +55,14 @@ def _normalize_origin(value: str) -> str:
 ALLOWED_HOSTS = [
     h for h in (_normalize_host(x) for x in _split_csv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")) if h
 ]
+
+# Render injects these automatically – always allow the live service hostname
+# so health checks never hit DisallowedHost when dashboard env is stale.
+for _render_var in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
+    _h = _normalize_host(os.environ.get(_render_var, ""))
+    if _h and _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
+
 if DEBUG and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS = list(set(ALLOWED_HOSTS + ["localhost", "127.0.0.1"]))
 
