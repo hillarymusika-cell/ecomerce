@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, homeForRole } from "../context/AuthContext";
 import { getErrorMessage } from "../utils/errors";
 import {
   getRememberPreference,
@@ -9,11 +9,27 @@ import {
   setRememberedEmail,
 } from "../utils/session";
 
+const ROLE_HINTS = {
+  admin: { title: "Admin sign in", eyebrow: "System admin" },
+  staff: { title: "Staff sign in", eyebrow: "Staff portal" },
+  customer: { title: "Sign in", eyebrow: "Welcome back" },
+};
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from || "/";
+  const [searchParams] = useSearchParams();
+
+  // Optional ?as=admin|staff to use dedicated API endpoint + default redirect
+  const asParam = (searchParams.get("as") || "").toLowerCase();
+  const loginType =
+    asParam === "admin" || asParam === "staff" || asParam === "superuser"
+      ? asParam
+      : "unified";
+  const hint = ROLE_HINTS[asParam] || ROLE_HINTS.customer;
+
+  const from = location.state?.from || null;
 
   const [form, setForm] = useState({
     email: getRememberedEmail(),
@@ -42,10 +58,37 @@ export default function Login() {
 
     setBusy(true);
     try {
-      await login({ email, password: form.password }, "unified", { remember });
+      const data = await login(
+        { email, password: form.password },
+        loginType,
+        { remember }
+      );
       if (remember) setRememberedEmail(email);
       else setRememberedEmail("");
-      navigate(from, { replace: true });
+
+      const role = data.role || homeForRole && null;
+      const resolvedRole =
+        data.role ||
+        (data.user?.is_superuser || data.user?.is_admin
+          ? "admin"
+          : data.user?.is_staff
+            ? "staff"
+            : "customer");
+
+      // Prefer explicit return path only if it matches the user's role access;
+      // otherwise send them to their portal home.
+      let dest = homeForRole(resolvedRole);
+      if (from) {
+        const adminOnly = from.startsWith("/admin");
+        const staffOnly = from.startsWith("/staff");
+        if (adminOnly && resolvedRole === "admin") dest = from;
+        else if (staffOnly && (resolvedRole === "staff" || resolvedRole === "admin"))
+          dest = from;
+        else if (!adminOnly && !staffOnly && resolvedRole === "customer") dest = from;
+        else if (!adminOnly && !staffOnly) dest = from; // account, orders, etc.
+      }
+
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Login failed. Check your credentials."));
     } finally {
@@ -57,8 +100,8 @@ export default function Login() {
     <section className="auth-page">
       <form className="form-card auth-card" onSubmit={submit} noValidate>
         <header className="auth-head">
-          <span className="eyebrow">Welcome back</span>
-          <h1>Sign in</h1>
+          <span className="eyebrow">{hint.eyebrow}</span>
+          <h1>{hint.title}</h1>
         </header>
         {error && (
           <div className="alert" role="alert">
@@ -116,7 +159,15 @@ export default function Login() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
         <p className="auth-footer">
-          New here? <Link to="/register">Create an account</Link>
+          {asParam === "admin" || asParam === "staff" ? (
+            <>
+              Customer account? <Link to="/login">Sign in here</Link>
+            </>
+          ) : (
+            <>
+              New here? <Link to="/register">Create an account</Link>
+            </>
+          )}
         </p>
       </form>
     </section>
