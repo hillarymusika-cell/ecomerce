@@ -28,7 +28,6 @@ def _split_csv(name: str, default: str = "") -> list[str]:
 
 
 def _normalize_host(value: str) -> str:
-    """Accept host or URL; return bare hostname (no scheme/path/slash)."""
     value = (value or "").strip().rstrip("/")
     if not value:
         return ""
@@ -38,7 +37,6 @@ def _normalize_host(value: str) -> str:
 
 
 def _normalize_origin(value: str) -> str:
-    """CORS/CSRF origin: scheme://host[:port], never a trailing slash."""
     value = (value or "").strip().rstrip("/")
     if not value:
         return ""
@@ -50,14 +48,10 @@ def _normalize_origin(value: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-# Comma-separated hosts. Prod example:
-# DJANGO_ALLOWED_HOSTS=ecomerce-xw1v.onrender.com,ecomerce-api.onrender.com,adams-collections.onrender.com
 ALLOWED_HOSTS = [
     h for h in (_normalize_host(x) for x in _split_csv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")) if h
 ]
 
-# Render injects these automatically – always allow the live service hostname
-# so health checks never hit DisallowedHost when dashboard env is stale.
 for _render_var in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
     _h = _normalize_host(os.environ.get(_render_var, ""))
     if _h and _h not in ALLOWED_HOSTS:
@@ -131,7 +125,6 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
-# CorsMiddleware must be as high as possible (before CommonMiddleware).
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -144,9 +137,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# ---------------------------------------------------------------------------
-# CORS / CSRF – frontend origins (absolute, no trailing slash)
-# ---------------------------------------------------------------------------
 _cors_default = (
     "http://localhost:5173,http://127.0.0.1:5173,"
     "https://adams-collections.onrender.com"
@@ -165,14 +155,7 @@ if _prod_frontend not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(_prod_frontend)
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
+CORS_ALLOW_METHODS = ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"]
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -294,12 +277,8 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
-    },
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
 MEDIA_URL = "/media/"
@@ -331,6 +310,10 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH", "")
+FLW_PUBLIC_KEY = os.environ.get("FLW_PUBLIC_KEY", "")
+FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY", "")
+# When True (or no public key), card pay can be confirmed in demo mode for testing
+PAYMENTS_DEMO = os.environ.get("PAYMENTS_DEMO", "True")
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
 
@@ -353,30 +336,11 @@ LOGGING = {
             "formatter": "verbose",
         },
     },
-    "root": {
-        "handlers": ["console"],
-        "level": LOG_LEVEL,
-    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
     "loggers": {
-        "django": {
-            "handlers": ["console"],
-            "level": LOG_LEVEL,
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "app": {
-            "handlers": ["console"],
-            "level": LOG_LEVEL,
-            "propagate": False,
-        },
-        "django_redis": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
+        "django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "app": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "django_redis": {"handlers": ["console"], "level": "WARNING", "propagate": False},
     },
 }
