@@ -15,12 +15,11 @@ const BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").repla
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
-    "Content-Type": "application/json",
     Accept: "application/json",
   },
   // JWT is sent via Authorization header – no cookies needed for API calls
   withCredentials: false,
-  timeout: 30000,
+  timeout: 60000,
 });
 
 api.interceptors.request.use((config) => {
@@ -28,6 +27,25 @@ api.interceptors.request.use((config) => {
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
   }
+
+  // FormData (image upload): let the browser set multipart boundary.
+  // Plain objects: default to JSON.
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+    }
+  } else if (
+    config.data &&
+    typeof config.data === "object" &&
+    !(config.data instanceof FormData)
+  ) {
+    config.headers = config.headers || {};
+    if (!config.headers["Content-Type"] && !config.headers["content-type"]) {
+      config.headers["Content-Type"] = "application/json";
+    }
+  }
+
   return config;
 });
 
