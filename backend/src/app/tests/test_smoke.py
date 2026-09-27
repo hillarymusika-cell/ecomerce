@@ -1,4 +1,4 @@
-"""Smoke tests for CI – models, health, catalog basics."""
+"""Smoke tests for CI – models, health, catalog, cart, checkout."""
 import pytest
 from rest_framework.test import APIClient
 
@@ -12,11 +12,12 @@ def api():
 
 @pytest.fixture
 def user(db):
+    # Do not reuse bootstrap migration numbers (+10000000001 / +10000000099)
     return User.objects.create_user(
         email="buyer@example.com",
         username="buyer",
         password="SecurePass123!",
-        telephone_no="+10000000001",
+        telephone_no="+15550001111",
     )
 
 
@@ -62,17 +63,17 @@ def test_register_and_login(api):
         "email": "newuser@example.com",
         "username": "newuser",
         "password": "SecurePass123!",
-        "telephone_no": "+10000000099",
+        "telephone_no": "+15550002222",
     }
     res = api.post("/auth/register/", payload, format="json")
-    assert res.status_code in (200, 201)
+    assert res.status_code in (200, 201), getattr(res, "data", res.content)
 
     res = api.post(
         "/auth/login/",
         {"email": payload["email"], "password": payload["password"]},
         format="json",
     )
-    assert res.status_code == 200
+    assert res.status_code == 200, getattr(res, "data", res.content)
     assert "tokens" in res.data
     assert "access" in res.data["tokens"]
 
@@ -92,14 +93,24 @@ def test_add_to_cart_and_checkout(api, user, product):
         {"product_id": product.id, "quantity": 2},
         format="json",
     )
-    assert res.status_code in (200, 201)
+    assert res.status_code in (200, 201), getattr(res, "data", res.content)
 
     res = api.get("/api/cart/")
     assert res.status_code == 200
     assert len(res.data["items"]) == 1
 
-    res = api.post("/api/orders/", {}, format="json")
-    assert res.status_code == 201
+    res = api.post(
+        "/api/orders/",
+        {
+            "shipping_address": {
+                "address": "1 Test St",
+                "city": "Nairobi",
+                "country": "KE",
+            }
+        },
+        format="json",
+    )
+    assert res.status_code == 201, getattr(res, "data", res.content)
     assert res.data["order_number"].startswith("ORD-")
     assert res.data["status"] == "pending"
 
