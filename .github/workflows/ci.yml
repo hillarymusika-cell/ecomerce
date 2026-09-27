@@ -94,8 +94,6 @@ jobs:
           pip-audit -r backend/requirements.txt --desc on || true
           echo "::notice::pip-audit completed (advisory; does not block CI)"
 
-      # SECURITY deploy checks only make sense with DEBUG=False.
-      # Running them under DJANGO_DEBUG=True always fails --fail-level WARNING.
       - name: Django system check (deploy)
         working-directory: backend/src
         env:
@@ -117,13 +115,15 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: backend/src
+        env:
+          # pytest-django reads this; keep explicit for CI clarity
+          DJANGO_SETTINGS_MODULE: project.settings
         run: |
           python -m pytest app/tests/ -v --tb=short \
             --cov=app \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=0 \
-            -q
+            --cov-fail-under=0
 
       - name: Upload coverage artifact
         if: always() && matrix.python-version == '3.12'
@@ -147,7 +147,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          # Only enable npm cache when lockfile exists (avoids path-resolution noise)
           cache: ${{ hashFiles('frontend/package-lock.json') != '' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
 
@@ -259,9 +258,7 @@ jobs:
           ok=0
           for i in $(seq 1 40); do
             if curl -fsS --max-time 3 http://127.0.0.1:18000/health/ >/tmp/health.json 2>/dev/null; then
-              echo "Health response:"
-              cat /tmp/health.json
-              echo
+              echo "Health response:"; cat /tmp/health.json; echo
               ok=1
               break
             fi
