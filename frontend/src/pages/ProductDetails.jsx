@@ -8,6 +8,7 @@ import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
 import ImageWithFallback from "../components/ImageWithFallback";
 import { getErrorMessage } from "../utils/errors";
+import { formatMoney, DEFAULT_CURRENCY } from "../utils/money";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const imageUrl = (value) =>
@@ -16,6 +17,15 @@ const imageUrl = (value) =>
       ? value
       : `${apiBase}${value}`
     : null;
+
+function productInStock(product) {
+  if (!product) return false;
+  if (typeof product.is_available === "boolean") return product.is_available;
+  if (typeof product.is_in_stock === "boolean") return product.is_in_stock;
+  if (typeof product.in_stock === "boolean") return product.in_stock;
+  if (product.track_inventory === false) return true;
+  return Number(product.stock_quantity) > 0;
+}
 
 export default function ProductDetails() {
   const { slug } = useParams();
@@ -65,9 +75,15 @@ export default function ProductDetails() {
     );
   }
 
+  const inStock = productInStock(product);
+
   const handleAdd = async () => {
     if (!isAuthenticated) {
       toast("Please log in to add items", "error");
+      return;
+    }
+    if (!inStock) {
+      toast("This product is out of stock", "error");
       return;
     }
     setBusy(true);
@@ -85,9 +101,10 @@ export default function ProductDetails() {
     product.compare_at_price &&
     Number(product.compare_at_price) > Number(product.price);
 
-  const maxQty = product.stock_quantity
-    ? Math.max(1, Number(product.stock_quantity))
-    : 99;
+  const maxQty =
+    product.track_inventory === false
+      ? 99
+      : Math.max(1, Number(product.stock_quantity) || 1);
 
   return (
     <section className="section container">
@@ -103,15 +120,15 @@ export default function ProductDetails() {
             src={imageUrl(product.primary_image_url)}
             alt={product.name}
           />
-          {!product.in_stock && <span className="product-badge out">Sold out</span>}
-          {product.in_stock && onSale && <span className="product-badge">Sale</span>}
+          {!inStock && <span className="product-badge out">Sold out</span>}
+          {inStock && onSale && <span className="product-badge">Sale</span>}
         </div>
         <div className="product-detail-info">
           <span className="eyebrow">{product.category_name || "Product"}</span>
           <h1>{product.name}</h1>
           <div className="product-row">
             <strong className="price-lg">
-              {product.currency || "UGX"} {Number(product.price).toLocaleString()}
+              {formatMoney(product.price, product.currency || DEFAULT_CURRENCY)}
             </strong>
             {onSale && (
               <del>{Number(product.compare_at_price).toLocaleString()}</del>
@@ -124,7 +141,7 @@ export default function ProductDetails() {
             <button
               type="button"
               aria-label="Decrease"
-              disabled={quantity <= 1}
+              disabled={quantity <= 1 || !inStock}
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
             >
               −
@@ -133,7 +150,7 @@ export default function ProductDetails() {
             <button
               type="button"
               aria-label="Increase"
-              disabled={quantity >= maxQty}
+              disabled={!inStock || quantity >= maxQty}
               onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
             >
               +
@@ -142,11 +159,11 @@ export default function ProductDetails() {
           <button
             type="button"
             className="button full"
-            disabled={!product.in_stock || busy}
+            disabled={!inStock || busy}
             onClick={handleAdd}
             aria-busy={busy}
           >
-            {!product.in_stock
+            {!inStock
               ? "Out of stock"
               : busy
                 ? "Adding…"
