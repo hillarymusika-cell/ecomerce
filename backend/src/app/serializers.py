@@ -122,15 +122,66 @@ class CartItemSerializer(serializers.ModelSerializer):
         source="product",
         write_only=True,
     )
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    unit_price = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    primary_image_url = serializers.SerializerMethodField()
+    max_quantity = serializers.SerializerMethodField()
+    in_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ["id", "product", "product_id", "quantity", "subtotal"]
-        read_only_fields = ["id", "subtotal"]
+        fields = [
+            "id",
+            "product",
+            "product_id",
+            "product_name",
+            "quantity",
+            "unit_price",
+            "subtotal",
+            "currency",
+            "primary_image_url",
+            "max_quantity",
+            "in_stock",
+        ]
+        read_only_fields = [
+            "id",
+            "product_name",
+            "unit_price",
+            "subtotal",
+            "currency",
+            "primary_image_url",
+            "max_quantity",
+            "in_stock",
+        ]
+
+    def get_unit_price(self, obj):
+        return obj.product.price
 
     def get_subtotal(self, obj):
         return obj.product.price * obj.quantity
+
+    def get_currency(self, obj):
+        return (obj.product.currency or "UGX").upper()
+
+    def get_primary_image_url(self, obj):
+        url = getattr(obj.product, "primary_image_url", None)
+        if not url:
+            return None
+        request = self.context.get("request")
+        if request is not None and str(url).startswith("/"):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_max_quantity(self, obj):
+        p = obj.product
+        if not p.track_inventory:
+            return 99
+        return max(0, int(p.stock_quantity or 0))
+
+    def get_in_stock(self, obj):
+        return bool(getattr(obj.product, "is_in_stock", True))
 
     def validate_quantity(self, value):
         if value < 1:
@@ -141,17 +192,44 @@ class CartItemSerializer(serializers.ModelSerializer):
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
     total = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ["id", "items", "total", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at", "total"]
+        fields = [
+            "id",
+            "items",
+            "item_count",
+            "total",
+            "currency",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "total",
+            "item_count",
+            "currency",
+        ]
 
     def get_total(self, obj):
         return sum(
             (item.product.price * item.quantity for item in obj.items.all()),
             start=Decimal("0.00"),
         )
+
+    def get_item_count(self, obj):
+        return sum(int(item.quantity or 0) for item in obj.items.all())
+
+    def get_currency(self, obj):
+        for item in obj.items.all():
+            c = (getattr(item.product, "currency", None) or "").upper()
+            if c:
+                return c
+        return "UGX"
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
