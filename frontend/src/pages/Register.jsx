@@ -92,7 +92,7 @@ export default function Register() {
         </aside>
 
         <form
-          className="form-card auth-card auth-card.wide card-in"
+          className="form-card auth-card wide card-in"
           onSubmit={submit}
           noValidate
         >
