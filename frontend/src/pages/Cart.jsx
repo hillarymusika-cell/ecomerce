@@ -5,13 +5,14 @@ import ImageWithFallback from "../components/ImageWithFallback";
 import EmptyState from "../components/EmptyState";
 import Loading from "../components/Loading";
 import { getErrorMessage } from "../utils/errors";
+import { formatMoney, DEFAULT_CURRENCY } from "../utils/money";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function thumb(item) {
   const url =
-    item.product?.primary_image_url ||
     item.primary_image_url ||
+    item.product?.primary_image_url ||
     item.image ||
     null;
   if (!url) return null;
@@ -22,8 +23,13 @@ export default function Cart() {
   const { cart, update, remove, clear, loading, isPending } = useCart();
   const navigate = useNavigate();
   const toast = useToast();
+  const currency = cart.currency || DEFAULT_CURRENCY;
 
-  const handleUpdate = async (id, qty) => {
+  const handleUpdate = async (id, qty, maxQty) => {
+    if (maxQty != null && qty > maxQty) {
+      toast(`Only ${maxQty} in stock`, "error");
+      return;
+    }
     try {
       await update(id, qty);
     } catch (err) {
@@ -58,6 +64,11 @@ export default function Cart() {
     );
   }
 
+  const itemCount =
+    cart.item_count ??
+    cart.items?.reduce((s, i) => s + Number(i.quantity || 0), 0) ??
+    0;
+
   return (
     <section className="section container">
       <div className="section-heading">
@@ -90,8 +101,18 @@ export default function Cart() {
           <div className="cart-list">
             {cart.items.map((item) => {
               const pending = isPending(item.id);
+              const maxQty = item.max_quantity ?? item.product?.stock_quantity;
+              const atMax =
+                maxQty != null && Number(item.quantity) >= Number(maxQty);
+              const unit = item.unit_price ?? item.product?.price ?? 0;
+              const lineCurrency =
+                item.currency || item.product?.currency || currency;
+
               return (
-                <div className={`cart-item${pending ? " is-pending" : ""}`} key={item.id}>
+                <div
+                  className={`cart-item${pending ? " is-pending" : ""}`}
+                  key={item.id}
+                >
                   <ImageWithFallback
                     className="cart-thumb"
                     src={thumb(item)}
@@ -101,12 +122,13 @@ export default function Cart() {
                     <h3>
                       {item.product_name || item.product?.name || "Product"}
                     </h3>
-                    <span>
-                      Unit:{" "}
-                      {Number(
-                        item.product?.price || item.unit_price || 0
-                      ).toLocaleString()}
-                    </span>
+                    <span>Unit: {formatMoney(unit, lineCurrency)}</span>
+                    {item.in_stock === false && (
+                      <span className="cart-stock-warn"> Out of stock</span>
+                    )}
+                    {atMax && item.in_stock !== false && (
+                      <span className="cart-stock-hint"> Max stock</span>
+                    )}
                   </div>
                   <div className="quantity">
                     <button
@@ -114,7 +136,11 @@ export default function Cart() {
                       aria-label="Decrease quantity"
                       disabled={pending || item.quantity <= 1}
                       onClick={() =>
-                        handleUpdate(item.id, Math.max(1, item.quantity - 1))
+                        handleUpdate(
+                          item.id,
+                          Math.max(1, item.quantity - 1),
+                          maxQty
+                        )
                       }
                     >
                       −
@@ -123,13 +149,17 @@ export default function Cart() {
                     <button
                       type="button"
                       aria-label="Increase quantity"
-                      disabled={pending}
-                      onClick={() => handleUpdate(item.id, item.quantity + 1)}
+                      disabled={pending || atMax}
+                      onClick={() =>
+                        handleUpdate(item.id, item.quantity + 1, maxQty)
+                      }
                     >
                       +
                     </button>
                   </div>
-                  <strong>{Number(item.subtotal || 0).toLocaleString()}</strong>
+                  <strong>
+                    {formatMoney(item.subtotal || 0, lineCurrency)}
+                  </strong>
                   <button
                     type="button"
                     className="remove"
@@ -146,11 +176,11 @@ export default function Cart() {
             <h2>Summary</h2>
             <div>
               <span>Items</span>
-              <strong>{cart.items.length}</strong>
+              <strong>{itemCount}</strong>
             </div>
             <div>
-              <span>Total</span>
-              <strong>{Number(cart.total || 0).toLocaleString()}</strong>
+              <span>Total ({currency})</span>
+              <strong>{formatMoney(cart.total || 0, currency)}</strong>
             </div>
             <button
               type="button"
@@ -159,7 +189,11 @@ export default function Cart() {
             >
               Checkout
             </button>
-            <Link className="button ghost full" to="/products" style={{ marginTop: 8 }}>
+            <Link
+              className="button ghost full"
+              to="/products"
+              style={{ marginTop: 8 }}
+            >
               Continue shopping
             </Link>
           </aside>
