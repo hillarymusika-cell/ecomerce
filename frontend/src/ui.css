@@ -202,3 +202,6 @@
 @media (max-width: 560px) {
   .pay-method-grid { grid-template-columns: 1fr; }
 }
+
+.cart-stock-warn { color: var(--danger, #b91c1c); font-size: 0.8rem; margin-left: 6px; }
+.cart-stock-hint { color: var(--muted); font-size: 0.8rem; margin-left: 6px; }
