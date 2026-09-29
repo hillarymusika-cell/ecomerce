@@ -8,6 +8,7 @@ import { ToastProvider } from "./components/Toast";
 import "./index.css";
 import "./ui.css";
 import "./dashboard.css";
+import "./auth-account.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
