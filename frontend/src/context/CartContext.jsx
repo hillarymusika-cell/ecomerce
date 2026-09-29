@@ -7,12 +7,20 @@ import {
   updateCartItem,
 } from "../api/cartApi";
 import { useAuth } from "./AuthContext";
+import { DEFAULT_CURRENCY } from "../utils/money";
+
+const emptyCart = {
+  items: [],
+  total: 0,
+  item_count: 0,
+  currency: DEFAULT_CURRENCY,
+};
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const { isAuthenticated } = useAuth();
-  const [cart, setCart] = useState({ items: [], total: 0 });
+  const [cart, setCart] = useState(emptyCart);
   const [loading, setLoading] = useState(false);
   const [pendingIds, setPendingIds] = useState(() => new Set());
 
@@ -25,17 +33,31 @@ export function CartProvider({ children }) {
     });
   };
 
+  const applyCart = (data) => {
+    if (data && typeof data === "object" && Array.isArray(data.items)) {
+      setCart({
+        ...data,
+        currency: data.currency || DEFAULT_CURRENCY,
+        item_count:
+          data.item_count ??
+          data.items.reduce((s, i) => s + Number(i.quantity || 0), 0),
+      });
+      return true;
+    }
+    return false;
+  };
+
   const refreshCart = useCallback(async () => {
     if (!isAuthenticated) {
-      setCart({ items: [], total: 0 });
+      setCart(emptyCart);
       return;
     }
     setLoading(true);
     try {
       const { data } = await getCart();
-      setCart(data);
+      applyCart(data);
     } catch {
-      setCart({ items: [], total: 0 });
+      setCart(emptyCart);
     } finally {
       setLoading(false);
     }
@@ -49,8 +71,9 @@ export function CartProvider({ children }) {
     const key = `add-${productId}`;
     setPending(key, true);
     try {
-      await addToCart(productId, quantity);
-      await refreshCart();
+      const { data } = await addToCart(productId, quantity);
+      if (!applyCart(data)) await refreshCart();
+      return data;
     } finally {
       setPending(key, false);
     }
@@ -59,8 +82,9 @@ export function CartProvider({ children }) {
   const update = async (id, quantity) => {
     setPending(id, true);
     try {
-      await updateCartItem(id, quantity);
-      await refreshCart();
+      const { data } = await updateCartItem(id, quantity);
+      if (!applyCart(data)) await refreshCart();
+      return data;
     } finally {
       setPending(id, false);
     }
@@ -69,8 +93,9 @@ export function CartProvider({ children }) {
   const remove = async (id) => {
     setPending(id, true);
     try {
-      await removeCartItem(id);
-      await refreshCart();
+      const { data } = await removeCartItem(id);
+      if (!applyCart(data)) await refreshCart();
+      return data;
     } finally {
       setPending(id, false);
     }
@@ -79,15 +104,18 @@ export function CartProvider({ children }) {
   const clear = async () => {
     setPending("clear", true);
     try {
-      await clearCart();
-      await refreshCart();
+      const { data } = await clearCart();
+      if (!applyCart(data)) await refreshCart();
+      return data;
     } finally {
       setPending("clear", false);
     }
   };
 
   const count =
-    cart.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    cart.item_count ??
+    cart.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) ??
+    0;
 
   const isPending = (id) => pendingIds.has(id);
 
