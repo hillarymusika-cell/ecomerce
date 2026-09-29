@@ -29,12 +29,17 @@ jobs:
   gate:
     name: CI gate
     runs-on: ubuntu-latest
+    # Only run the gate when CI succeeded or this is a manual deploy.
+    # Cancelled/failed CI → job skipped (workflow stays green, no deploy).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       ref: ${{ steps.resolve.outputs.ref }}
       allowed: ${{ steps.resolve.outputs.allowed }}
     steps:
-      - name: Resolve commit & enforce CI success
+      - name: Resolve commit & allow deploy
         id: resolve
         run: |
           set -euo pipefail
@@ -44,13 +49,11 @@ jobs:
             ref="${{ github.event.workflow_run.head_branch }}"
             echo "workflow_run conclusion=$conclusion sha=$sha ref=$ref"
             if [ "$conclusion" != "success" ]; then
-              echo "::error::CI did not succeed (conclusion=$conclusion) — deploy blocked"
+              echo "::warning::CI conclusion=$conclusion — deploy skipped"
               echo "allowed=false" >> "$GITHUB_OUTPUT"
-              echo "sha=$sha" >> "$GITHUB_OUTPUT"
-              echo "ref=$ref" >> "$GITHUB_OUTPUT"
-              exit 1
+            else
+              echo "allowed=true" >> "$GITHUB_OUTPUT"
             fi
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
           else
             sha="${{ github.sha }}"
             ref="${{ github.ref_name }}"
@@ -63,7 +66,7 @@ jobs:
   build-and-push:
     name: Build & push images
     needs: gate
-    if: needs.gate.outputs.allowed == 'true'
+    if: needs.gate.result == 'success' && needs.gate.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     outputs:
@@ -138,11 +141,13 @@ jobs:
       name: staging
       url: ${{ vars.STAGING_URL }}
     if: >-
+      needs.gate.result == 'success' &&
       needs.gate.outputs.allowed == 'true' &&
+      needs.build-and-push.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
        github.event_name == 'workflow_run')
     steps:
-      - name: Webhook deploy (fail-closed when configured)
+      - name: Webhook deploy (optional)
         env:
           WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
@@ -152,7 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${WEBHOOK_URL:-}" ]; then
-            echo "::warning::No DEPLOY_WEBHOOK_URL — images pushed to GHCR only (Render auto-deploys from main)"
+            echo "::notice::No DEPLOY_WEBHOOK_URL — images on GHCR; Render auto-deploys from main"
             exit 0
           fi
           code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST "$WEBHOOK_URL" \
@@ -190,7 +195,9 @@ jobs:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
     if: >-
+      needs.gate.result == 'success' &&
       needs.gate.outputs.allowed == 'true' &&
+      needs.build-and-push.result == 'success' &&
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.environment == 'production'
     steps:
@@ -244,28 +251,40 @@ jobs:
           set -euo pipefail
           allowed="${{ needs.gate.outputs.allowed }}"
           gate="${{ needs.gate.result }}"
-          echo "allowed=$allowed gate=$gate"
-          echo "build=${{ needs.build-and-push.result }}"
-          echo "staging=${{ needs.deploy-staging.result }}"
-          echo "production=${{ needs.deploy-production.result }}"
+          build="${{ needs.build-and-push.result }}"
+          staging="${{ needs.deploy-staging.result }}"
+          production="${{ needs.deploy-production.result }}"
 
-          if [ "$gate" = "failure" ] || [ "$allowed" = "false" ]; then
-            echo "::error::CD blocked — upstream CI did not succeed"
+          echo "allowed=$allowed gate=$gate"
+          echo "build=$build staging=$staging production=$production"
+
+          # CI did not succeed → gate skipped → intentional no-op (green)
+          if [ "$gate" = "skipped" ]; then
+            echo "::notice::CD skipped — upstream CI was not successful (cancelled/failed)"
+            exit 0
+          fi
+
+          if [ "$gate" = "failure" ]; then
+            echo "::error::CD gate failed unexpectedly"
             exit 1
           fi
 
-          for pair in "build:${{ needs.build-and-push.result }}"; do
-            r="${pair#*:}"
-            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
-              echo "::error::$pair"
-              exit 1
-            fi
-          done
-          for pair in "staging:${{ needs.deploy-staging.result }}" "production:${{ needs.deploy-production.result }}"; do
+          if [ "$allowed" = "false" ]; then
+            echo "::notice::CD skipped — deploy not allowed"
+            exit 0
+          fi
+
+          if [ "$build" != "success" ] && [ "$build" != "skipped" ]; then
+            echo "::error::build=$build"
+            exit 1
+          fi
+
+          for pair in "staging:$staging" "production:$production"; do
             r="${pair#*:}"
             if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
               echo "::error::$pair"
               exit 1
             fi
           done
+
           echo "CD OK"
