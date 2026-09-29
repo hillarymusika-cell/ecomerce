@@ -315,6 +315,9 @@ FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY", "")
 # When True (or no public key), card pay can be confirmed in demo mode for testing
 PAYMENTS_DEMO = os.environ.get("PAYMENTS_DEMO", "True")
 
+# Store currency (Ugandan Shilling)
+DEFAULT_CURRENCY = os.environ.get("DEFAULT_CURRENCY", "UGX").upper()[:3] or "UGX"
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
 
 LOGGING = {
