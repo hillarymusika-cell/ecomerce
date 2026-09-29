@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "./Toast";
 import ImageWithFallback from "./ImageWithFallback";
 import { getErrorMessage } from "../utils/errors";
+import { formatMoney, DEFAULT_CURRENCY } from "../utils/money";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -14,17 +15,32 @@ function imageUrl(value) {
   return value.startsWith("http") ? value : `${apiBase}${value}`;
 }
 
+/** API sends is_in_stock / is_available — not in_stock */
+function productInStock(product) {
+  if (!product) return false;
+  if (typeof product.is_available === "boolean") return product.is_available;
+  if (typeof product.is_in_stock === "boolean") return product.is_in_stock;
+  if (typeof product.in_stock === "boolean") return product.in_stock;
+  if (product.track_inventory === false) return true;
+  return Number(product.stock_quantity) > 0;
+}
+
 export default function ProductCard({ product }) {
   const { add } = useCart();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const inStock = productInStock(product);
 
   const handleAdd = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (!isAuthenticated) {
       toast("Please log in to add items", "error");
+      return;
+    }
+    if (!inStock) {
+      toast("This product is out of stock", "error");
       return;
     }
     if (adding) return;
@@ -50,8 +66,8 @@ export default function ProductCard({ product }) {
           src={imageUrl(product.primary_image_url)}
           alt={product.name}
         />
-        {!product.in_stock && <span className="product-badge out">Sold out</span>}
-        {product.in_stock && onSale && <span className="product-badge">Sale</span>}
+        {!inStock && <span className="product-badge out">Sold out</span>}
+        {inStock && onSale && <span className="product-badge">Sale</span>}
       </Link>
       <div className="product-info">
         <span className="eyebrow">{product.category_name || "Product"}</span>
@@ -60,7 +76,7 @@ export default function ProductCard({ product }) {
         </Link>
         <div className="product-row">
           <strong>
-            {product.currency || "UGX"} {Number(product.price).toLocaleString()}
+            {formatMoney(product.price, product.currency || DEFAULT_CURRENCY)}
           </strong>
           {onSale && (
             <del>{Number(product.compare_at_price).toLocaleString()}</del>
@@ -69,14 +85,14 @@ export default function ProductCard({ product }) {
         <button
           type="button"
           className="button full"
-          disabled={!product.in_stock || adding}
+          disabled={!inStock || adding}
           onClick={handleAdd}
           aria-busy={adding}
         >
-          {product.in_stock && !adding && isAuthenticated && (
+          {inStock && !adding && isAuthenticated && (
             <ShoppingBag size={16} aria-hidden />
           )}
-          {!product.in_stock
+          {!inStock
             ? "Out of stock"
             : adding
               ? "Adding…"
