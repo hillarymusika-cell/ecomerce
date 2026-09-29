@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { createOrder, initiatePayment, confirmPayment } from "../api/orderApi";
 import EmptyState from "../components/EmptyState";
 import { getErrorMessage } from "../utils/errors";
+import { formatMoney, DEFAULT_CURRENCY } from "../utils/money";
 
 function loadFlutterwave() {
   return new Promise((resolve, reject) => {
@@ -33,6 +34,7 @@ export default function Checkout() {
   const [method, setMethod] = useState("card");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const currency = cart.currency || DEFAULT_CURRENCY;
 
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -56,7 +58,7 @@ export default function Checkout() {
         public_key: pay.public_key,
         tx_ref: pay.reference,
         amount: Number(pay.amount),
-        currency: pay.currency || "USD",
+        currency: pay.currency || DEFAULT_CURRENCY,
         payment_options: "card",
         customer: {
           email: pay.customer?.email,
@@ -239,8 +241,8 @@ export default function Checkout() {
         </div>
 
         <div className="checkout-total">
-          <span>Order total</span>
-          <strong>{Number(cart.total || 0).toLocaleString()}</strong>
+          <span>Order total ({currency})</span>
+          <strong>{formatMoney(cart.total || 0, currency)}</strong>
         </div>
 
         <button
