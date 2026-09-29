@@ -113,7 +113,7 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=12, decimal_places=2, db_index=True)
     compare_at_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.CharField(max_length=3, default="UGX")
     track_inventory = models.BooleanField(default=True)
     stock_quantity = models.PositiveIntegerField(default=0, db_index=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
@@ -142,20 +142,14 @@ class Product(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            # Primary listing: active products ordered by name
             models.Index(fields=["status", "name"]),
-            # Featured products
             models.Index(fields=["status", "is_featured"]),
             models.Index(fields=["is_featured", "status", "-created_at"]),
-            # Category browsing
             models.Index(fields=["category", "status"]),
             models.Index(fields=["category", "status", "name"]),
-            # Recent / chronological
             models.Index(fields=["status", "-created_at"]),
-            # Inventory management
             models.Index(fields=["status", "stock_quantity"]),
             models.Index(fields=["track_inventory", "stock_quantity"]),
-            # Price range filters
             models.Index(fields=["status", "price"]),
         ]
 
@@ -306,7 +300,7 @@ class Order(models.Model):
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.CharField(max_length=3, default="UGX")
     shipping_address = models.JSONField(default=dict, blank=True)
     billing_address = models.JSONField(default=dict, blank=True)
     notes = models.TextField(blank=True)
@@ -317,14 +311,11 @@ class Order(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            # User order history (most common query)
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["user", "status"]),
             models.Index(fields=["user", "status", "-created_at"]),
-            # Admin / status filtering
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["status", "paid_at"]),
-            # Reporting
             models.Index(fields=["-created_at", "status"]),
         ]
 
@@ -408,7 +399,7 @@ class Transaction(models.Model):
         db_index=True,
     )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.CharField(max_length=3, default="UGX")
     provider_payment_id = models.CharField(max_length=128, blank=True, db_index=True)
     provider_response = models.JSONField(default=dict, blank=True)
     description = models.TextField(blank=True)
