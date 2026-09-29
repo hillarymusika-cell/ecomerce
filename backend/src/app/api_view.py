@@ -6,6 +6,7 @@ from decimal import Decimal
 import logging
 import uuid
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import status, viewsets, filters
@@ -45,10 +46,6 @@ ALLOWED_IMAGE_TYPES = {
 }
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 
-
-# ---------------------------------------------------------------------------
-# Catalog
-# ---------------------------------------------------------------------------
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.filter(is_active=True).select_related("parent")
@@ -119,13 +116,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         ctx["request"] = self.request
         return ctx
 
-    def _is_staff(self, user):
-        return bool(
-            user
-            and user.is_authenticated
-            and (user.is_staff or user.is_admin or user.is_superuser)
-        )
-
     @action(
         detail=True,
         methods=["post"],
@@ -134,7 +124,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         parser_classes=[MultiPartParser, FormParser],
     )
     def upload_images(self, request, slug=None):
-        """Upload one or more images. Field name: image or images."""
         product = self.get_object()
         files = request.FILES.getlist("images") or request.FILES.getlist("image")
         if not files and request.FILES.get("image"):
@@ -231,25 +220,44 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response(ser.data)
 
 
-# ---------------------------------------------------------------------------
-# Cart
-# ---------------------------------------------------------------------------
-
 class CartViewSet(viewsets.ViewSet):
+    """Authenticated cart with stock caps, pruning, and UGX totals."""
+
     permission_classes = [IsAuthenticated]
 
     def _get_cart(self, user):
         cart, _ = Cart.objects.get_or_create(user=user)
         return cart
 
-    def list(self, request):
-        cart = self._get_cart(request.user)
-        cart = (
+    def _loaded_cart(self, cart):
+        return (
             Cart.objects.filter(pk=cart.pk)
             .prefetch_related("items__product__images", "items__product__category")
             .first()
         )
-        return Response(CartSerializer(cart, context={"request": request}).data)
+
+    def _prune_invalid(self, cart):
+        """Remove unavailable products and clamp quantities to stock."""
+        for item in list(cart.items.select_related("product").all()):
+            product = item.product
+            if product.status != Product.Status.ACTIVE or not product.is_in_stock:
+                item.delete()
+                continue
+            if product.track_inventory and item.quantity > product.stock_quantity:
+                if product.stock_quantity < 1:
+                    item.delete()
+                else:
+                    item.quantity = product.stock_quantity
+                    item.save(update_fields=["quantity", "updated_at"])
+
+    def _serialize_cart(self, request, cart):
+        cart = self._loaded_cart(cart)
+        return CartSerializer(cart, context={"request": request}).data
+
+    def list(self, request):
+        cart = self._get_cart(request.user)
+        self._prune_invalid(cart)
+        return Response(self._serialize_cart(request, cart))
 
     @action(detail=False, methods=["post"])
     def add(self, request):
@@ -281,29 +289,33 @@ class CartViewSet(viewsets.ViewSet):
                     {"detail": "Product not available."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if product.track_inventory and product.stock_quantity < quantity:
+            if product.track_inventory and product.stock_quantity < 1:
                 return Response(
-                    {"detail": "Insufficient stock."},
+                    {"detail": "Out of stock."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             cart = self._get_cart(request.user)
             item, created = CartItem.objects.select_for_update().get_or_create(
                 cart=cart,
                 product=product,
-                defaults={"quantity": quantity},
+                defaults={"quantity": 0},
             )
-            if not created:
-                new_qty = item.quantity + quantity
-                if product.track_inventory and product.stock_quantity < new_qty:
-                    return Response(
-                        {"detail": "Insufficient stock for requested quantity."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                item.quantity = new_qty
-                item.save(update_fields=["quantity", "updated_at"])
-        item = CartItem.objects.select_related("product").get(pk=item.pk)
+            new_qty = item.quantity + quantity
+            if product.track_inventory and product.stock_quantity < new_qty:
+                return Response(
+                    {
+                        "detail": f"Only {product.stock_quantity} in stock.",
+                        "max_quantity": product.stock_quantity,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            item.quantity = new_qty
+            item.save(update_fields=["quantity", "updated_at"])
+            cart.save(update_fields=["updated_at"])
+
+        data = self._serialize_cart(request, cart)
         return Response(
-            CartItemSerializer(item, context={"request": request}).data,
+            data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
@@ -329,40 +341,46 @@ class CartViewSet(viewsets.ViewSet):
                 {"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST
             )
         if quantity <= 0:
+            cart = item.cart
             item.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(self._serialize_cart(request, cart))
+
         product = item.product
+        if product.status != Product.Status.ACTIVE:
+            item.delete()
+            return Response(
+                {"detail": "Product is no longer available."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if product.track_inventory and product.stock_quantity < quantity:
             return Response(
-                {"detail": "Insufficient stock."}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": f"Only {product.stock_quantity} in stock.",
+                    "max_quantity": product.stock_quantity,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
         item.quantity = quantity
         item.save(update_fields=["quantity", "updated_at"])
-        return Response(
-            CartItemSerializer(item, context={"request": request}).data
-        )
+        return Response(self._serialize_cart(request, item.cart))
 
     @action(detail=False, methods=["delete"], url_path=r"items/(?P<item_id>[^/.]+)")
     def remove_item(self, request, item_id=None):
-        deleted, _ = CartItem.objects.filter(
-            id=item_id, cart__user=request.user
-        ).delete()
-        if not deleted:
+        item = CartItem.objects.filter(id=item_id, cart__user=request.user).first()
+        if not item:
             return Response(
                 {"detail": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND
             )
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        cart = item.cart
+        item.delete()
+        return Response(self._serialize_cart(request, cart))
 
     @action(detail=False, methods=["delete"])
     def clear(self, request):
         cart = self._get_cart(request.user)
         cart.items.all().delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(self._serialize_cart(request, cart))
 
-
-# ---------------------------------------------------------------------------
-# Orders
-# ---------------------------------------------------------------------------
 
 class OrderViewSet(viewsets.ModelViewSet):
     """Customer orders: list/retrieve + create from cart."""
@@ -441,11 +459,13 @@ class OrderViewSet(viewsets.ModelViewSet):
                         )
                     )
                 order_number = f"ORD-{uuid.uuid4().hex[:12].upper()}"
+                currency = getattr(settings, "DEFAULT_CURRENCY", None) or "UGX"
                 order = Order.objects.create(
                     order_number=order_number,
                     user=request.user,
                     subtotal=subtotal,
                     total=subtotal,
+                    currency=str(currency).upper()[:3] or "UGX",
                     status=Order.Status.PENDING,
                     shipping_address=shipping_address,
                     billing_address=billing_address,
