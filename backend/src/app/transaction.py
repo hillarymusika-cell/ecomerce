@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_pending_transaction(
-    user, order: Order, amount: Decimal, currency: str = "USD"
+    user, order: Order, amount: Decimal, currency: str = "UGX"
 ) -> Transaction:
     """Create a pending Transaction for an Order (one pending at a time)."""
     with transaction.atomic():
@@ -47,6 +47,7 @@ def create_pending_transaction(
         ).update(status=Transaction.Status.FAILED)
 
         tx_id = f"TXN-{order.pk}-{uuid.uuid4().hex[:12].upper()}"
+        cur = (currency or getattr(settings, "DEFAULT_CURRENCY", "UGX") or "UGX").upper()[:3]
 
         return Transaction.objects.create(
             user=user,
@@ -54,7 +55,7 @@ def create_pending_transaction(
             transaction_id=tx_id,
             type=Transaction.Type.PAYMENT,
             amount=amount,
-            currency=currency,
+            currency=cur,
             status=Transaction.Status.PENDING,
             provider=Transaction.Provider.FLUTTERWAVE,
         )
@@ -98,7 +99,7 @@ class InitiatePaymentView(APIView):
                 user=request.user,
                 order=order,
                 amount=order.total,
-                currency=order.currency or "USD",
+                currency=order.currency or getattr(settings, "DEFAULT_CURRENCY", "UGX"),
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -132,13 +133,7 @@ class InitiatePaymentView(APIView):
 
 
 class ConfirmPaymentView(APIView):
-    """
-    Confirm a card payment after client-side checkout.
-
-    - With FLW_SECRET_KEY: expects flutterwave transaction_id for server verify
-      (optional lightweight path; webhook remains source of truth).
-    - Demo mode: marks pending transaction successful for testing without keys.
-    """
+    """Confirm a card payment after client-side checkout."""
 
     permission_classes = [IsAuthenticated]
 
@@ -199,8 +194,6 @@ class ConfirmPaymentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Live path: store provider id; webhook should finalize.
-            # Demo path: complete immediately when allowed.
             if demo_confirm or _payments_demo_enabled() or not _flw_public_key():
                 if not (_payments_demo_enabled() or not _flw_public_key() or demo_confirm):
                     return Response(
@@ -225,7 +218,6 @@ class ConfirmPaymentView(APIView):
                     }
                 )
 
-            # Non-demo: attach provider reference and wait for webhook
             if provider_payment_id:
                 tx.provider_payment_id = provider_payment_id
                 tx.provider_response = {
@@ -318,7 +310,6 @@ def payment_webhook(request):
     return HttpResponse(status=200)
 
 
-# Backward-compatible name used by older imports
 def initiate_payment(request, order_id):
     """Legacy function view – prefer InitiatePaymentView."""
     view = InitiatePaymentView.as_view()
